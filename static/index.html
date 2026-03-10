@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docker Control Room</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="background-orb orb-a"></div>
+    <div class="background-orb orb-b"></div>
+
+    <main class="shell">
+      <section class="login-panel card" id="loginPanel">
+        <div class="eyebrow">Acces securise</div>
+        <h1>Docker Control Room</h1>
+        <p class="lead">
+          Connecte-toi pour surveiller et lancer l'ensemble des machines depuis une seule page web.
+        </p>
+
+        <div class="mode-chip" id="modeChip">Chargement...</div>
+
+        <form id="loginForm" class="form">
+          <label>
+            <span>Utilisateur</span>
+            <input id="username" name="username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            <span>Mot de passe</span>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="primary-button">Se connecter</button>
+        </form>
+
+        <div class="hint" id="credentialsHint"></div>
+        <p class="feedback" id="loginFeedback"></p>
+      </section>
+
+      <section class="dashboard hidden" id="dashboard">
+        <header class="topbar card">
+          <div>
+            <div class="eyebrow">Centre de commande</div>
+            <h2>Vue d'ensemble des machines</h2>
+            <p class="lead small" id="welcomeLine"></p>
+          </div>
+          <div class="topbar-actions">
+            <div class="mode-chip" id="dashboardMode">Mode</div>
+            <button id="logoutButton" class="ghost-button">Deconnexion</button>
+          </div>
+        </header>
+
+        <section class="stats-grid" id="statsGrid"></section>
+
+        <section class="workspace">
+          <div class="card action-panel">
+            <div class="section-head">
+              <div>
+                <div class="eyebrow">Actions globales</div>
+                <h3>Executer toutes les machines</h3>
+              </div>
+              <span class="soft-badge" id="composeBadge">Compose non detecte</span>
+            </div>
+
+            <div class="action-buttons">
+              <button class="primary-button" data-action="start-all">Demarrer tout</button>
+              <button class="secondary-button" data-action="restart-all">Redemarrer tout</button>
+              <button class="secondary-button danger" data-action="stop-all">Arreter tout</button>
+              <button class="secondary-button" data-action="deploy-stack">Deployer la stack</button>
+            </div>
+
+            <p class="feedback" id="actionFeedback"></p>
+          </div>
+
+          <div class="card log-panel">
+            <div class="section-head">
+              <div>
+                <div class="eyebrow">Activite recente</div>
+                <h3>Journal systeme</h3>
+              </div>
+            </div>
+            <ul class="log-list" id="activityList"></ul>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Machines</div>
+              <h3>Etat des conteneurs</h3>
+            </div>
+          </div>
+          <div class="machines-grid" id="machinesGrid"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
