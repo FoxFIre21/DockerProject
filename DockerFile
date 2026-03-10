@@ -1,19 +1,10 @@
-# Use official Python image
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Copy project files
-COPY server.py /app/
-COPY static /app/static
+COPY server.py .
+COPY static ./static
 
-# Install dependencies if requirements.txt exists
-COPY requirements.txt /app/ 2>/dev/null || true
-RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
-
-# Expose port
 EXPOSE 9510
 
-# Run the server
 CMD ["python", "server.py"]
