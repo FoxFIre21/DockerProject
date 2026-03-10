@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "M4yf7y2tP7jo6OKPzVOudly63xtA3s2lwjFJuEeTLgA=",
+      "salt": "hyLVCU7/vLDPvMLKd2UMEQ==",
+      "role": "admin",
+      "email": "",
+      "totp_enabled": false,
+      "totp_secret": ""
+    },
+    {
+      "username": "maxime",
+      "password": "RYwLXpiAfcUmv5zjf7KmddNKQ7la3g5w2ofaYLnMo3M=",
+      "salt": "XRZOFjMxW2dhANg/9EcONA==",
+      "role": "admin",
+      "email": "",
+      "totp_enabled": false,
+      "totp_secret": ""
+    }
+  ]
+}

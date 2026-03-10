@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
+import base64
+import hashlib
+import hmac
 import json
 import os
+import random
+import re
 import secrets
 import shutil
+import struct
 import subprocess
 import time
 from http import HTTPStatus
@@ -14,12 +20,16 @@ from urllib.parse import unquote, urlparse
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
+USERS_FILE = ROOT / "users.json"
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "9510"))
 AUTH_USER = os.environ.get("APP_USER", "admin")
 AUTH_PASSWORD = os.environ.get("APP_PASSWORD", "docker123")
 
-SESSIONS = {}
+SESSIONS = {}  # token -> {"username": str, "created_at": float, "ip": str}
+PENDING_2FA = {}  # temp_token -> {"username": str, "expires": float}
+PENDING_TOTP_SETUPS = {}  # username -> {"secret": str, "expires": float}
+
 DEMO_CONTAINERS = [
     {
         "id": "demo-api",
@@ -61,10 +71,160 @@ ACTIVITY_LOG = [
 DOCKER_STATE = {"checked_at": 0.0, "ready": False}
 
 
+# ===== USER STORE =====
+
+def hash_password(password, salt=None):
+    salt_bytes = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, 200_000)
+    return {
+        "salt": base64.b64encode(salt_bytes).decode("utf-8"),
+        "hash": base64.b64encode(digest).decode("utf-8"),
+    }
+
+
+def make_user(username, password, role="operator", email=""):
+    password_data = hash_password(password)
+    return {
+        "username": username,
+        "password": password_data["hash"],
+        "salt": password_data["salt"],
+        "role": role,
+        "email": email,
+        "totp_enabled": False,
+        "totp_secret": "",
+    }
+
+
+def verify_user_password(user, password):
+    try:
+        salt = base64.b64decode(user["salt"])
+    except Exception:
+        return False
+    expected = hash_password(password, salt)["hash"]
+    return secrets.compare_digest(expected, user.get("password", ""))
+
+
+def public_user(user):
+    return {
+        "username": user["username"],
+        "email": user.get("email", ""),
+        "role": user.get("role", "operator"),
+        "totp_enabled": bool(user.get("totp_enabled", False)),
+    }
+
+
+def validate_username(username):
+    return bool(re.fullmatch(r"[A-Za-z0-9._-]{3,32}", username))
+
+
+def save_users():
+    payload = {"users": sorted(USERS.values(), key=lambda item: item["username"].lower())}
+    USERS_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def load_users():
+    users = {}
+    if USERS_FILE.exists():
+        try:
+            raw = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            raw = {}
+        for item in raw.get("users", []):
+            username = str(item.get("username", "")).strip()
+            if not username:
+                continue
+            users[username] = {
+                "username": username,
+                "password": str(item.get("password", "")),
+                "salt": str(item.get("salt", "")),
+                "role": str(item.get("role", "operator")),
+                "email": str(item.get("email", "")),
+                "totp_enabled": bool(item.get("totp_enabled", False)),
+                "totp_secret": str(item.get("totp_secret", "")),
+            }
+
+    if not users:
+        users[AUTH_USER] = make_user(AUTH_USER, AUTH_PASSWORD, role="admin")
+        save_seed = True
+    else:
+        save_seed = False
+
+    if not any(user.get("role") == "admin" for user in users.values()):
+        if AUTH_USER in users:
+            users[AUTH_USER]["role"] = "admin"
+        else:
+            users[AUTH_USER] = make_user(AUTH_USER, AUTH_PASSWORD, role="admin")
+        save_seed = True
+
+    if save_seed:
+        payload = {"users": sorted(users.values(), key=lambda item: item["username"].lower())}
+        USERS_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    return users
+
+
+USERS = load_users()
+
+
+def current_user_record(headers):
+    session = user_from_token(headers)
+    if not session:
+        return None
+    return USERS.get(session.get("username", ""))
+
+
+def current_user_is_admin(headers):
+    user = current_user_record(headers)
+    return bool(user and user.get("role") == "admin")
+
+
+def admin_count():
+    return sum(1 for user in USERS.values() if user.get("role") == "admin")
+
+
+# ===== TOTP HELPERS =====
+
+def generate_totp_secret():
+    return base64.b32encode(os.urandom(20)).decode("utf-8")
+
+
+def totp_code(secret, t=None):
+    if t is None:
+        t = int(time.time()) // 30
+    key = base64.b32decode(secret, casefold=True)
+    msg = struct.pack(">Q", t)
+    h = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = h[-1] & 0xF
+    code = (
+        (h[offset] & 0x7F) << 24
+        | h[offset + 1] << 16
+        | h[offset + 2] << 8
+        | h[offset + 3]
+    ) % 1_000_000
+    return str(code).zfill(6)
+
+
+def verify_totp(secret, code):
+    t = int(time.time()) // 30
+    return any(
+        secrets.compare_digest(totp_code(secret, t + d), str(code).zfill(6))
+        for d in (-1, 0, 1)
+    )
+
+
+def generate_otp():
+    """Generate a random 6-digit OTP code."""
+    return str(random.randint(100000, 999999))
+
+
+# ===== LOGGING =====
+
 def push_log(message):
     ACTIVITY_LOG.insert(0, message)
     del ACTIVITY_LOG[20:]
 
+
+# ===== RESPONSE HELPERS =====
 
 def json_response(handler, status, payload):
     body = json.dumps(payload).encode("utf-8")
@@ -88,6 +248,8 @@ def load_json(handler):
     except json.JSONDecodeError:
         return {}
 
+
+# ===== DOCKER HELPERS =====
 
 def docker_available():
     return shutil.which("docker") is not None
@@ -356,10 +518,6 @@ def dashboard_payload():
         "summary": summary,
         "containers": containers,
         "activity": ACTIVITY_LOG[:10],
-        "credentials": {
-            "username": AUTH_USER,
-            "password": AUTH_PASSWORD,
-        },
     }
 
 
@@ -367,7 +525,7 @@ def get_token(headers):
     auth = headers.get("Authorization", "")
     prefix = "Bearer "
     if auth.startswith(prefix):
-        return auth[len(prefix) :].strip()
+        return auth[len(prefix):].strip()
     return ""
 
 
@@ -375,53 +533,364 @@ def user_from_token(headers):
     token = get_token(headers)
     return SESSIONS.get(token)
 
+def get_client_ip(handler):
+    forwarded = handler.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return handler.client_address[0] if handler.client_address else "unknown"
+
 
 class AppHandler(BaseHTTPRequestHandler):
     server_version = "DockerPanel/1.0"
 
+    # ===== GET ROUTES =====
+
     def do_GET(self):
         parsed = urlparse(self.path)
+
         if parsed.path == "/api/bootstrap":
             return json_response(self, HTTPStatus.OK, dashboard_payload())
+
         if parsed.path == "/api/dashboard":
-            if not user_from_token(self.headers):
+            user = current_user_record(self.headers)
+            if not user:
                 return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
             payload = dashboard_payload()
-            payload["user"] = user_from_token(self.headers)
+            payload["user"] = public_user(user)
             return json_response(self, HTTPStatus.OK, payload)
+
+        if parsed.path == "/api/2fa/status":
+            user = current_user_record(self.headers)
+            if not user:
+                return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+            return json_response(self, HTTPStatus.OK, {
+                "totp": bool(user.get("totp_enabled", False)),
+            })
+
+        if parsed.path == "/api/2fa/totp/setup":
+            user = current_user_record(self.headers)
+            if not user:
+                return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+            secret = generate_totp_secret()
+            PENDING_TOTP_SETUPS[user["username"]] = {
+                "secret": secret,
+                "expires": time.time() + 600,
+            }
+            username = user["username"]
+            uri = (
+                f"otpauth://totp/DockerManager:{username}"
+                f"?secret={secret}&issuer=DockerManager&algorithm=SHA1&digits=6&period=30"
+            )
+            return json_response(self, HTTPStatus.OK, {"secret": secret, "uri": uri})
+
+        if parsed.path == "/api/sessions":
+            token = get_token(self.headers)
+            if not user_from_token(self.headers):
+                return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+            session_list = []
+            for sess_token, sess_data in SESSIONS.items():
+                session_list.append({
+                    "token": sess_token,
+                    "token_preview": sess_token[:12],
+                    "username": sess_data.get("username", ""),
+                    "ip": sess_data.get("ip", "unknown"),
+                    "created_at": sess_data.get("created_at", 0),
+                    "current": sess_token == token,
+                })
+            return json_response(self, HTTPStatus.OK, {"sessions": session_list})
+
+        if parsed.path == "/api/account":
+            user = current_user_record(self.headers)
+            if not user:
+                return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+            return json_response(self, HTTPStatus.OK, public_user(user))
+
+        if parsed.path == "/api/admin/users":
+            if not current_user_is_admin(self.headers):
+                return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces admin requis."})
+            users = [public_user(user) for user in sorted(USERS.values(), key=lambda item: item["username"].lower())]
+            return json_response(self, HTTPStatus.OK, {"users": users})
+
         return self.serve_static(parsed.path)
+
+    # ===== POST ROUTES =====
 
     def do_POST(self):
         parsed = urlparse(self.path)
+
         if parsed.path == "/api/login":
             return self.handle_login()
+
         if parsed.path == "/api/logout":
             return self.handle_logout()
+
+        if parsed.path == "/api/2fa/verify":
+            return self.handle_2fa_verify()
+
+        if parsed.path == "/api/2fa/totp/enable":
+            return self.handle_totp_enable()
+
+        if parsed.path == "/api/2fa/totp/disable":
+            return self.handle_2fa_disable("totp")
+
+        if parsed.path == "/api/account/email":
+            return self.handle_account_email()
+
+        if parsed.path == "/api/account/password":
+            return self.handle_account_password()
+
+        if parsed.path == "/api/admin/users":
+            return self.handle_admin_user_create()
+
+        if parsed.path == "/api/admin/users/delete":
+            return self.handle_admin_user_delete()
+
+        if parsed.path == "/api/sessions/revoke":
+            return self.handle_sessions_revoke()
+
         if parsed.path.startswith("/api/containers/"):
             return self.handle_container_route(parsed.path)
+
         if parsed.path.startswith("/api/actions/"):
             return self.handle_action(parsed.path.rsplit("/", 1)[-1])
+
         return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Route inconnue."})
+
+    # ===== LOGIN =====
 
     def handle_login(self):
         payload = load_json(self)
-        username = payload.get("username", "")
+        username = payload.get("username", "").strip()
         password = payload.get("password", "")
-        if username != AUTH_USER or password != AUTH_PASSWORD:
+        user = USERS.get(username)
+
+        if not user or not verify_user_password(user, password):
             push_log(f"Tentative de connexion refusee pour {username or 'utilisateur inconnu'}.")
             return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Identifiants invalides."})
 
+        if user.get("totp_enabled") and user.get("totp_secret"):
+            temp_token = secrets.token_urlsafe(32)
+            PENDING_2FA[temp_token] = {
+                "username": username,
+                "expires": time.time() + 300,
+            }
+            push_log(f"A2F requise pour {username}.")
+            return json_response(self, HTTPStatus.OK, {
+                "2fa_required": True,
+                "temp_token": temp_token,
+                "methods": ["totp"],
+            })
+
         token = secrets.token_urlsafe(24)
-        SESSIONS[token] = {"username": username}
+        SESSIONS[token] = {
+            "username": username,
+            "role": user.get("role", "operator"),
+            "created_at": time.time(),
+            "ip": get_client_ip(self),
+        }
         push_log(f"Connexion acceptee pour {username}.")
-        return json_response(
-            self,
-            HTTPStatus.OK,
-            {
-                "token": token,
-                "user": {"username": username},
-            },
-        )
+        return json_response(self, HTTPStatus.OK, {
+            "token": token,
+            "user": public_user(user),
+        })
+
+    # ===== 2FA VERIFY (login step) =====
+
+    def handle_2fa_verify(self):
+        payload = load_json(self)
+        temp_token = payload.get("temp_token", "")
+        code = str(payload.get("code", "")).strip().zfill(6)
+
+        # Validate temp token
+        pending = PENDING_2FA.get(temp_token)
+        if not pending:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Session temporaire invalide ou expiree."})
+        if time.time() > pending["expires"]:
+            del PENDING_2FA[temp_token]
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Session temporaire expiree. Reconnectez-vous."})
+
+        username = pending["username"]
+        user = USERS.get(username)
+        if not user or not user.get("totp_enabled") or not user.get("totp_secret"):
+            del PENDING_2FA[temp_token]
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "A2F non configuree pour ce compte."})
+
+        if not verify_totp(user["totp_secret"], code):
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Code incorrect ou expire."})
+
+        # Clean up pending
+        del PENDING_2FA[temp_token]
+
+        # Create real session
+        token = secrets.token_urlsafe(24)
+        SESSIONS[token] = {
+            "username": username,
+            "role": user.get("role", "operator"),
+            "created_at": time.time(),
+            "ip": get_client_ip(self),
+        }
+        push_log(f"Connexion A2F acceptee pour {username}.")
+        return json_response(self, HTTPStatus.OK, {
+            "token": token,
+            "user": public_user(user),
+        })
+
+    # ===== TOTP =====
+
+    def handle_totp_enable(self):
+        user = current_user_record(self.headers)
+        if not user:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+
+        payload = load_json(self)
+        code = str(payload.get("code", "")).strip()
+        pending = PENDING_TOTP_SETUPS.get(user["username"])
+
+        if not pending:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Aucune configuration TOTP en attente. Recommencez la configuration."})
+        if time.time() > pending["expires"]:
+            del PENDING_TOTP_SETUPS[user["username"]]
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "La configuration TOTP a expire. Recommencez la configuration."})
+
+        pending_secret = pending["secret"]
+
+        if not verify_totp(pending_secret, code):
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Code TOTP invalide."})
+
+        user["totp_secret"] = pending_secret
+        user["totp_enabled"] = True
+        del PENDING_TOTP_SETUPS[user["username"]]
+        save_users()
+        push_log(f"TOTP active pour {user['username']}.")
+        return json_response(self, HTTPStatus.OK, {"ok": True, "message": "A2F TOTP activee avec succes."})
+
+    def handle_2fa_disable(self, method):
+        user = current_user_record(self.headers)
+        if not user:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+
+        if method != "totp":
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Methode inconnue."})
+
+        user["totp_enabled"] = False
+        user["totp_secret"] = ""
+        PENDING_TOTP_SETUPS.pop(user["username"], None)
+        save_users()
+        push_log(f"TOTP desactive pour {user['username']}.")
+        return json_response(self, HTTPStatus.OK, {"ok": True})
+
+    # ===== ACCOUNT =====
+
+    def handle_account_email(self):
+        user = current_user_record(self.headers)
+        if not user:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+
+        payload = load_json(self)
+        email = payload.get("email", "").strip()
+        user["email"] = email
+        save_users()
+        push_log(f"Email du profil mis a jour pour {user['username']}.")
+        return json_response(self, HTTPStatus.OK, {"ok": True, "user": public_user(user)})
+
+    def handle_account_password(self):
+        user = current_user_record(self.headers)
+        if not user:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+
+        payload = load_json(self)
+        current = payload.get("current", "")
+        new_password = payload.get("new_password", "")
+
+        if not verify_user_password(user, current):
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Mot de passe actuel incorrect."})
+
+        if not new_password:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Le nouveau mot de passe ne peut pas etre vide."})
+
+        if len(new_password) < 6:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Le mot de passe doit contenir au moins 6 caracteres."})
+
+        password_data = hash_password(new_password)
+        user["password"] = password_data["hash"]
+        user["salt"] = password_data["salt"]
+        save_users()
+        push_log(f"Mot de passe modifie pour {user['username']}.")
+        return json_response(self, HTTPStatus.OK, {"ok": True, "message": "Mot de passe modifie avec succes."})
+
+    def handle_admin_user_create(self):
+        actor = current_user_record(self.headers)
+        if not actor:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+        if actor.get("role") != "admin":
+            return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces admin requis."})
+
+        payload = load_json(self)
+        username = payload.get("username", "").strip()
+        password = payload.get("password", "")
+        email = payload.get("email", "").strip()
+        role = payload.get("role", "operator").strip() or "operator"
+
+        if not validate_username(username):
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Nom d'utilisateur invalide. Utilisez 3 a 32 caracteres: lettres, chiffres, point, tiret ou underscore."})
+        if username in USERS:
+            return json_response(self, HTTPStatus.CONFLICT, {"error": "Cet utilisateur existe deja."})
+        if len(password) < 6:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Le mot de passe doit contenir au moins 6 caracteres."})
+        if role not in {"admin", "operator"}:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Role invalide."})
+
+        USERS[username] = make_user(username, password, role=role, email=email)
+        save_users()
+        push_log(f"Utilisateur {username} cree par {actor['username']}.")
+        return json_response(self, HTTPStatus.OK, {"ok": True, "user": public_user(USERS[username])})
+
+    def handle_admin_user_delete(self):
+        actor = current_user_record(self.headers)
+        if not actor:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+        if actor.get("role") != "admin":
+            return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces admin requis."})
+
+        payload = load_json(self)
+        username = payload.get("username", "").strip()
+        if username not in USERS:
+            return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Utilisateur introuvable."})
+        if username == actor["username"]:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Impossible de supprimer votre propre compte."})
+        if USERS[username].get("role") == "admin" and admin_count() <= 1:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Impossible de supprimer le dernier administrateur."})
+
+        del USERS[username]
+        save_users()
+        revoked_tokens = [token for token, session in SESSIONS.items() if session.get("username") == username]
+        for token in revoked_tokens:
+            del SESSIONS[token]
+        push_log(f"Utilisateur {username} supprime par {actor['username']}.")
+        return json_response(self, HTTPStatus.OK, {"ok": True})
+
+    # ===== SESSIONS REVOKE =====
+
+    def handle_sessions_revoke(self):
+        current_token = get_token(self.headers)
+        if not user_from_token(self.headers):
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+
+        payload = load_json(self)
+        token_to_revoke = payload.get("token", "")
+
+        if token_to_revoke == current_token:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Impossible de revoquer votre session courante via cette interface."})
+
+        if token_to_revoke in SESSIONS:
+            username = SESSIONS[token_to_revoke].get("username", "?")
+            del SESSIONS[token_to_revoke]
+            push_log(f"Session de {username} revoquee.")
+            return json_response(self, HTTPStatus.OK, {"ok": True})
+
+        return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Session introuvable."})
+
+    # ===== LOGOUT =====
 
     def handle_logout(self):
         token = get_token(self.headers)
@@ -431,8 +900,10 @@ class AppHandler(BaseHTTPRequestHandler):
             push_log(f"Session fermee pour {username}.")
         return json_response(self, HTTPStatus.OK, {"ok": True})
 
+    # ===== EXISTING HANDLERS =====
+
     def handle_action(self, action):
-        user = user_from_token(self.headers)
+        user = current_user_record(self.headers)
         if not user:
             return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
 
@@ -449,7 +920,7 @@ class AppHandler(BaseHTTPRequestHandler):
 
         payload = dashboard_payload()
         payload["message"] = message
-        payload["user"] = user
+        payload["user"] = public_user(user)
         return json_response(self, HTTPStatus.OK, payload)
 
     def handle_container_route(self, path):
@@ -461,7 +932,7 @@ class AppHandler(BaseHTTPRequestHandler):
         return self.handle_container_action(container_id, action)
 
     def handle_container_action(self, container_id, action):
-        user = user_from_token(self.headers)
+        user = current_user_record(self.headers)
         if not user:
             return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
 
@@ -480,7 +951,7 @@ class AppHandler(BaseHTTPRequestHandler):
 
         payload = dashboard_payload()
         payload["message"] = message
-        payload["user"] = user
+        payload["user"] = public_user(user)
         return json_response(self, HTTPStatus.OK, payload)
 
     def serve_static(self, path):

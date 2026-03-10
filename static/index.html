@@ -4,241 +4,348 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Docker Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
 
+    <!-- BG decoration -->
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="bg-orb bg-orb-3"></div>
+    <div class="bg-grid"></div>
+
     <!-- ===== LOGIN ===== -->
     <div id="loginPanel" class="login-overlay">
-      <div class="login-box">
-        <div class="login-logo">
-          <svg class="login-logo-icon" viewBox="0 0 24 24" fill="none">
-            <rect x="3"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
-            <rect x="8"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
-            <rect x="13" y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
-            <rect x="3"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
-            <rect x="8"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
-            <path d="M18 6v12M3 7h15" stroke="#0db7ed" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
+      <div class="login-card">
+
+        <div class="login-brand">
+          <div class="login-icon-ring">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="3"  y="8"  width="4" height="4" rx="1" fill="currentColor"/>
+              <rect x="8"  y="8"  width="4" height="4" rx="1" fill="currentColor"/>
+              <rect x="13" y="8"  width="4" height="4" rx="1" fill="currentColor"/>
+              <rect x="3"  y="13" width="4" height="4" rx="1" fill="currentColor" opacity=".4"/>
+              <rect x="8"  y="13" width="4" height="4" rx="1" fill="currentColor" opacity=".4"/>
+              <path d="M18 6v12M3 7h15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
           <div>
-            <div class="login-title">Docker Manager</div>
-            <div class="login-subtitle">Proxmox-style Container Interface</div>
+            <h1 class="login-title">Docker Manager</h1>
+            <p class="login-sub">Infrastructure Control Panel</p>
           </div>
         </div>
 
-        <div class="login-form-wrap">
-          <div class="login-mode-row" id="modeChip">Chargement...</div>
+        <div class="login-mode-badge" id="modeChip">Chargement...</div>
 
-          <form id="loginForm">
-            <div class="form-group">
-              <label class="form-label">Utilisateur</label>
-              <input id="username" name="username" type="text" class="form-input"
+        <form id="loginForm" class="login-form">
+          <div class="field-group">
+            <label class="field-label">Utilisateur</label>
+            <div class="field-wrap">
+              <svg class="field-icon" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z"/>
+              </svg>
+              <input id="username" name="username" type="text" class="field-input"
                 autocomplete="username" placeholder="admin" required />
             </div>
-            <div class="form-group">
-              <label class="form-label">Mot de passe</label>
-              <input id="password" name="password" type="password" class="form-input"
+          </div>
+          <div class="field-group">
+            <label class="field-label">Mot de passe</label>
+            <div class="field-wrap">
+              <svg class="field-icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/>
+              </svg>
+              <input id="password" name="password" type="password" class="field-input"
                 autocomplete="current-password" placeholder="••••••••" required />
             </div>
-            <div class="form-group">
-              <label class="form-label">Realm</label>
-              <select class="form-input form-select">
-                <option>Docker Auth</option>
-              </select>
+          </div>
+          <p class="login-error" id="loginFeedback"></p>
+          <button type="submit" class="btn-login">
+            <span>Se connecter</span>
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+        </form>
+
+        <div id="twoFaStep" class="hidden">
+          <p class="login-sub" style="margin-bottom:16px">Code A2F requis</p>
+          <div class="field-group" style="margin-bottom:12px">
+            <label class="field-label">Code TOTP</label>
+            <div class="field-wrap">
+              <input id="twoFaCode" type="text" class="field-input" inputmode="numeric" maxlength="6" placeholder="000000" />
             </div>
-            <div class="login-feedback" id="loginFeedback"></div>
-            <button type="submit" class="btn-login">Se connecter</button>
-          </form>
+          </div>
+          <button type="button" class="btn-login" id="twoFaSubmit">
+            <span>Verifier</span>
+          </button>
+          <p class="login-error" id="twoFaFeedback"></p>
         </div>
+
       </div>
     </div>
 
-    <!-- ===== MAIN APP ===== -->
+    <!-- ===== APP ===== -->
     <div id="app" class="hidden">
 
       <!-- HEADER -->
-      <header class="pve-header">
-        <div class="pve-header-logo">
-          <svg class="header-logo-icon" viewBox="0 0 24 24" fill="none">
-            <rect x="3"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
-            <rect x="8"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
-            <rect x="13" y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
-            <rect x="3"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
-            <rect x="8"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
-            <path d="M18 6v12M3 7h15" stroke="#0db7ed" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span class="header-logo-text">Docker Manager</span>
+      <header class="app-header">
+        <div class="header-brand">
+          <div class="header-logo">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="3"  y="8"  width="4" height="4" rx="1" fill="currentColor"/>
+              <rect x="8"  y="8"  width="4" height="4" rx="1" fill="currentColor"/>
+              <rect x="13" y="8"  width="4" height="4" rx="1" fill="currentColor"/>
+              <rect x="3"  y="13" width="4" height="4" rx="1" fill="currentColor" opacity=".4"/>
+              <rect x="8"  y="13" width="4" height="4" rx="1" fill="currentColor" opacity=".4"/>
+              <path d="M18 6v12M3 7h15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="header-title">Docker<span class="header-title-accent">Manager</span></span>
         </div>
 
-        <div class="pve-header-center" id="headerStats">
-          <!-- Stats chips injected by JS -->
-        </div>
+        <div class="header-stats" id="headerStats"></div>
 
-        <div class="pve-header-right">
-          <span class="header-mode-chip" id="headerMode">—</span>
-          <span class="header-user" id="headerUser"></span>
-          <button class="btn-header-logout" id="logoutBtn">Deconnexion</button>
+        <div class="header-right">
+          <span class="header-badge" id="headerMode">—</span>
+          <div class="header-user-chip">
+            <div class="user-avatar"></div>
+            <span id="headerUser">—</span>
+          </div>
+          <!-- Admin settings button -->
+          <button class="btn-admin" id="adminBtn" title="Parametres admin">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+          <button class="btn-logout" id="logoutBtn">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clip-rule="evenodd"/>
+              <path fill-rule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clip-rule="evenodd"/>
+            </svg>
+          </button>
         </div>
       </header>
 
       <!-- BODY -->
-      <div class="pve-body">
+      <div class="app-body">
 
         <!-- SIDEBAR -->
-        <nav class="pve-sidebar">
-          <div class="sidebar-section-title">Datacenter</div>
+        <aside class="app-sidebar">
 
-          <div class="sidebar-node" id="sidebarHostNode">
-            <span class="sidebar-node-icon">&#9654;</span>
-            <svg class="sidebar-node-img" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M2 4a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V4zM2 10a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zM4 16a2 2 0 012-2h8a2 2 0 012 2v.5a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5V16z"/>
+          <div class="sidebar-header">
+            <span class="sidebar-header-label">Infrastructure</span>
+          </div>
+
+          <div class="sidebar-host">
+            <div class="sidebar-host-dot"></div>
+            <svg viewBox="0 0 20 20" fill="currentColor" class="sidebar-host-icon">
+              <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z" clip-rule="evenodd"/>
             </svg>
-            <span class="sidebar-node-label">docker-host</span>
+            <span>docker-host</span>
           </div>
 
+          <div class="sidebar-section-label">Conteneurs</div>
           <div class="sidebar-tree" id="sidebarTree">
-            <!-- Container items injected by JS -->
+            <div class="sidebar-placeholder">Chargement...</div>
           </div>
 
-          <div class="sidebar-divider"></div>
+          <div class="sidebar-sep"></div>
 
-          <div class="sidebar-section-title">Actions globales</div>
+          <div class="sidebar-section-label">Actions</div>
           <div class="sidebar-actions">
-            <button class="btn-sidebar start" id="startAllBtn">&#9654; Demarrer tout</button>
-            <button class="btn-sidebar restart" id="restartAllBtn">&#8635; Redemarrer tout</button>
-            <button class="btn-sidebar stop" id="stopAllBtn">&#9632; Arreter tout</button>
-            <button class="btn-sidebar deploy" id="deployBtn">&#8853; Deployer stack</button>
+            <button class="sidebar-btn start" id="startAllBtn">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 010 1.393z"/></svg>
+              Demarrer tout
+            </button>
+            <button class="sidebar-btn restart" id="restartAllBtn">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 00-.908-.417A4 4 0 118 4a3.993 3.993 0 01-1.416.26V4.5A.5.5 0 006 4L4 7l2 3a.5.5 0 00.584.168V8.74A5 5 0 018 3z" clip-rule="evenodd"/></svg>
+              Redemarrer tout
+            </button>
+            <button class="sidebar-btn stop" id="stopAllBtn">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5h6A1.5 1.5 0 0112.5 5v6a1.5 1.5 0 01-1.5 1.5H5A1.5 1.5 0 013.5 11V5A1.5 1.5 0 015 3.5z"/></svg>
+              Arreter tout
+            </button>
+            <button class="sidebar-btn deploy" id="deployBtn">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a5.53 5.53 0 00-3.594 1.342c-.766.66-1.321 1.52-1.464 2.383C1.266 6.095 0 7.555 0 9.318 0 11.366 1.708 13 3.781 13h8.906C14.502 13 16 11.57 16 9.773c0-1.636-1.242-2.969-2.834-3.194C12.923 3.999 10.69 2 8 2zm2.354 5.146l-3 3a.5.5 0 01-.708 0l-1.5-1.5a.5.5 0 11.708-.708L7 9.793l2.646-2.647a.5.5 0 01.708.708z"/></svg>
+              Deployer stack
+            </button>
           </div>
 
-          <div class="sidebar-compose-badge" id="composeBadge">—</div>
-        </nav>
+          <div class="sidebar-compose" id="composeBadge">—</div>
 
-        <!-- MAIN CONTENT -->
-        <main class="pve-main">
+        </aside>
+
+        <!-- MAIN -->
+        <main class="app-main">
 
           <!-- TABS -->
-          <div class="pve-tabs">
-            <button class="pve-tab active" data-tab="summary">
+          <nav class="app-tabs">
+            <button class="app-tab active" data-tab="summary">
               <svg viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1 2a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H2a1 1 0 01-1-1V2zM1 7a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H2a1 1 0 01-1-1V7zM1 12a1 1 0 011-1h5a1 1 0 010 2H2a1 1 0 01-1-1z"/>
+                <path d="M8 4a.5.5 0 01.5.5V6a.5.5 0 01-.5.5H5a.5.5 0 010-1h2.5V4.5A.5.5 0 018 4zm4.5 5a.5.5 0 01-.5.5H8.5a.5.5 0 010-1H12a.5.5 0 01.5.5zM5 12.5A.5.5 0 015.5 12H12a.5.5 0 010 1H5.5a.5.5 0 01-.5-.5zM5.5 6a.5.5 0 000 1H7a.5.5 0 000-1H5.5z"/>
+                <path d="M2 2a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2H2zm0 1h12a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z"/>
               </svg>
               Sommaire
             </button>
-            <button class="pve-tab" data-tab="containers">
+            <button class="app-tab" data-tab="containers">
               <svg viewBox="0 0 16 16" fill="currentColor">
-                <path d="M14 1a1 1 0 011 1v12a1 1 0 01-1 1H2a1 1 0 01-1-1V2a1 1 0 011-1h12zM2 0a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V2a2 2 0 00-2-2H2z"/>
-                <path d="M14 5H2V4h12v1zm0 3H2V7h12v1zm0 3H8v-1h6v1z"/>
+                <path d="M1 2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H2a1 1 0 01-1-1V2zm5 0a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H7a1 1 0 01-1-1V2zm5 0a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1V2zM1 7a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H2a1 1 0 01-1-1V7zm5 0a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H7a1 1 0 01-1-1V7zm5 0a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1V7zM1 12a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H2a1 1 0 01-1-1v-2zm5 0a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1H7a1 1 0 01-1-1v-2zm5 0a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2z"/>
               </svg>
               Conteneurs
             </button>
-            <button class="pve-tab" data-tab="logs">
+            <button class="app-tab" data-tab="logs">
               <svg viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1.5 1.5A.5.5 0 012 1h12a.5.5 0 01.5.5v2A.5.5 0 0114 4H2a.5.5 0 01-.5-.5v-2zm0 4A.5.5 0 012 5h5a.5.5 0 010 1H2a.5.5 0 01-.5-.5v-.5zm0 2A.5.5 0 012 7h5a.5.5 0 010 1H2a.5.5 0 01-.5-.5V7zm0 2A.5.5 0 012 9h5a.5.5 0 010 1H2a.5.5 0 01-.5-.5V9zm6 0A.5.5 0 018 9h5a.5.5 0 010 1H8a.5.5 0 01-.5-.5V9z"/>
+                <path d="M2 1a1 1 0 000 2h12a1 1 0 100-2H2zm0 4a1 1 0 000 2h7a1 1 0 100-2H2zm0 4a1 1 0 000 2h5a1 1 0 100-2H2z"/>
               </svg>
               Journal
             </button>
-          </div>
+          </nav>
 
           <!-- TAB: SUMMARY -->
-          <div class="tab-content" id="tab-summary">
+          <div class="tab-pane" id="tab-summary">
+
+            <!-- Stat cards row -->
+            <div class="stat-cards">
+              <div class="stat-card">
+                <div class="stat-card-eyebrow">Total</div>
+                <div class="stat-card-value" id="statTotal">—</div>
+                <div class="stat-card-label">conteneurs</div>
+                <div class="stat-card-glow"></div>
+              </div>
+              <div class="stat-card running">
+                <div class="stat-card-eyebrow">En execution</div>
+                <div class="stat-card-value" id="statRunning">—</div>
+                <div class="stat-card-label">actifs</div>
+                <div class="stat-card-glow"></div>
+              </div>
+              <div class="stat-card stopped">
+                <div class="stat-card-eyebrow">Arretes</div>
+                <div class="stat-card-value" id="statStopped">—</div>
+                <div class="stat-card-label">inactifs</div>
+                <div class="stat-card-glow"></div>
+              </div>
+              <div class="stat-card degraded">
+                <div class="stat-card-eyebrow">A surveiller</div>
+                <div class="stat-card-value" id="statDegraded">—</div>
+                <div class="stat-card-label">anomalies</div>
+                <div class="stat-card-glow"></div>
+              </div>
+            </div>
+
+            <!-- Summary grid -->
             <div class="summary-grid">
 
-              <div class="pve-panel">
-                <div class="pve-panel-header">Vue d'ensemble</div>
-                <div class="pve-panel-body">
-                  <div class="stat-row">
-                    <span class="stat-row-label">Total conteneurs</span>
-                    <span class="stat-row-value" id="statTotal">—</span>
+              <div class="glass-card">
+                <div class="glass-card-header">
+                  <svg class="glass-card-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+                  </svg>
+                  Actions rapides
+                </div>
+                <div class="glass-card-body">
+                  <div class="action-grid">
+                    <button class="action-pill start" data-action="start-all">
+                      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 010 1.393z"/></svg>
+                      Demarrer tout
+                    </button>
+                    <button class="action-pill restart" data-action="restart-all">
+                      <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 3a5 5 0 104.546 2.914.5.5 0 00-.908-.417A4 4 0 118 4a3.993 3.993 0 01-1.416.26V4.5A.5.5 0 006 4L4 7l2 3a.5.5 0 00.584.168V8.74A5 5 0 018 3z" clip-rule="evenodd"/></svg>
+                      Redemarrer tout
+                    </button>
+                    <button class="action-pill stop" data-action="stop-all">
+                      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5h6A1.5 1.5 0 0112.5 5v6a1.5 1.5 0 01-1.5 1.5H5A1.5 1.5 0 013.5 11V5A1.5 1.5 0 015 3.5z"/></svg>
+                      Arreter tout
+                    </button>
+                    <button class="action-pill deploy" data-action="deploy-stack">
+                      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a5.53 5.53 0 00-3.594 1.342c-.766.66-1.321 1.52-1.464 2.383C1.266 6.095 0 7.555 0 9.318 0 11.366 1.708 13 3.781 13h8.906C14.502 13 16 11.57 16 9.773c0-1.636-1.242-2.969-2.834-3.194C12.923 3.999 10.69 2 8 2zm2.354 5.146l-3 3a.5.5 0 01-.708 0l-1.5-1.5a.5.5 0 11.708-.708L7 9.793l2.646-2.647a.5.5 0 01.708.708z"/></svg>
+                      Deployer stack
+                    </button>
                   </div>
-                  <div class="stat-row">
-                    <span class="stat-row-label">En execution</span>
-                    <span class="stat-row-value text-green" id="statRunning">—</span>
-                  </div>
-                  <div class="stat-row">
-                    <span class="stat-row-label">Arretes</span>
-                    <span class="stat-row-value text-muted" id="statStopped">—</span>
-                  </div>
-                  <div class="stat-row">
-                    <span class="stat-row-label">A surveiller</span>
-                    <span class="stat-row-value text-orange" id="statDegraded">—</span>
-                  </div>
+                  <div class="action-log" id="actionFeedback"></div>
                 </div>
               </div>
 
-              <div class="pve-panel">
-                <div class="pve-panel-header">Actions rapides</div>
-                <div class="pve-panel-body">
-                  <div class="action-btn-grid">
-                    <button class="btn-action start" data-action="start-all">&#9654; Demarrer tout</button>
-                    <button class="btn-action restart" data-action="restart-all">&#8635; Redemarrer tout</button>
-                    <button class="btn-action stop" data-action="stop-all">&#9632; Arreter tout</button>
-                    <button class="btn-action deploy" data-action="deploy-stack">&#8853; Deployer stack</button>
-                  </div>
-                  <div class="action-feedback" id="actionFeedback"></div>
+              <div class="glass-card">
+                <div class="glass-card-header">
+                  <svg class="glass-card-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+                  </svg>
+                  Machine selectionnee
                 </div>
-              </div>
-
-              <div class="pve-panel">
-                <div class="pve-panel-header">Machine selectionnee</div>
-                <div class="pve-panel-body">
-                  <div id="selectedContainerCard"></div>
-                </div>
-              </div>
-
-              <div class="pve-panel summary-wide">
-                <div class="pve-panel-header">Etat rapide des conteneurs</div>
-                <div class="pve-panel-body">
-                  <div class="quick-containers" id="quickContainers">
-                    <!-- Quick container rows injected by JS -->
-                  </div>
+                <div class="glass-card-body" id="selectedContainerCard">
+                  <div class="empty-state">Aucune machine selectionnee</div>
                 </div>
               </div>
 
             </div>
+
+            <!-- Quick containers -->
+            <div class="glass-card mt">
+              <div class="glass-card-header">
+                <svg class="glass-card-icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                </svg>
+                Etat des conteneurs
+              </div>
+              <div class="glass-card-body no-pad">
+                <div class="quick-containers" id="quickContainers"></div>
+              </div>
+            </div>
+
           </div>
 
           <!-- TAB: CONTAINERS -->
-          <div class="tab-content hidden" id="tab-containers">
-            <div class="pve-panel full-height">
-              <div class="pve-panel-header">
-                Conteneurs Docker
-                <span class="panel-header-count" id="containerCount">0</span>
+          <div class="tab-pane hidden" id="tab-containers">
+            <div class="glass-card fill">
+              <div class="glass-card-header">
+                <div class="header-with-badge">
+                  <svg class="glass-card-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
+                  </svg>
+                  Conteneurs Docker
+                </div>
+                <span class="count-badge" id="containerCount">0</span>
               </div>
-              <div class="pve-panel-body no-pad">
-                <table class="pve-table">
+              <div class="glass-card-body no-pad fill-body">
+                <table class="data-table">
                   <thead>
                     <tr>
-                      <th style="width:80px">Status</th>
+                      <th>Status</th>
                       <th>Nom</th>
                       <th>Image</th>
-                      <th style="width:100px">ID</th>
-                      <th style="width:90px">Sante</th>
+                      <th>ID</th>
+                      <th>Sante</th>
                       <th>Ports</th>
-                      <th style="width:220px">Actions</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
-                  <tbody id="containersTableBody">
-                    <!-- Populated by JS -->
-                  </tbody>
+                  <tbody id="containersTableBody"></tbody>
                 </table>
               </div>
             </div>
           </div>
 
           <!-- TAB: LOGS -->
-          <div class="tab-content hidden" id="tab-logs">
-            <div class="pve-panel full-height">
-              <div class="pve-panel-header">
-                Journal d'activite
-                <span class="live-indicator">
+          <div class="tab-pane hidden" id="tab-logs">
+            <div class="glass-card fill">
+              <div class="glass-card-header">
+                <div class="header-with-badge">
+                  <svg class="glass-card-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2zM5 14h6v2H5v-2z" clip-rule="evenodd"/>
+                    <path d="M15 7h1a2 2 0 012 2v5.5a1.5 1.5 0 01-3 0V7z"/>
+                  </svg>
+                  Journal d'activite
+                </div>
+                <div class="live-chip">
                   <span class="live-dot"></span>
                   Live
-                </span>
-              </div>
-              <div class="pve-panel-body no-pad">
-                <div class="log-list" id="activityList">
-                  <!-- Populated by JS -->
                 </div>
+              </div>
+              <div class="glass-card-body no-pad fill-body">
+                <div class="log-feed" id="activityList"></div>
               </div>
             </div>
           </div>
@@ -247,17 +354,194 @@
       </div>
 
       <!-- STATUS BAR -->
-      <div class="pve-statusbar">
-        <span class="statusbar-live">
+      <footer class="app-statusbar">
+        <div class="statusbar-left">
           <span class="live-dot"></span>
-          Connecte
-        </span>
-        <span class="statusbar-sep">|</span>
-        <span id="statusUser"></span>
-      </div>
+          <span>Connecte</span>
+        </div>
+        <div class="statusbar-right">
+          <span id="statusUser"></span>
+        </div>
+      </footer>
 
     </div>
 
+    <!-- ===== ADMIN MODAL ===== -->
+    <div id="adminModal" class="modal-overlay hidden">
+      <div class="modal">
+
+        <!-- Sidebar nav -->
+        <div class="modal-sidebar">
+          <div class="modal-sidebar-header">
+            <svg viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px;color:var(--cyan)">
+              <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+            </svg>
+            <span>Administration</span>
+          </div>
+
+          <button class="modal-tab-btn active" data-modal-tab="profil">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z"/>
+            </svg>
+            <span>Profil</span>
+          </button>
+
+          <button class="modal-tab-btn" data-modal-tab="securite">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/>
+            </svg>
+            <span>Securite</span>
+          </button>
+
+          <button class="modal-tab-btn" data-modal-tab="a2f">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+            <span>A2F</span>
+          </button>
+
+          <button class="modal-tab-btn" data-modal-tab="users">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 10a3 3 0 100-6 3 3 0 000 6z"/>
+              <path fill-rule="evenodd" d="M2 16.5A5.5 5.5 0 017.5 11h5A5.5 5.5 0 0118 16.5a.5.5 0 01-.5.5h-15a.5.5 0 01-.5-.5z" clip-rule="evenodd"/>
+            </svg>
+            <span>Utilisateurs</span>
+          </button>
+
+          <button class="modal-tab-btn" data-modal-tab="sessions">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd"/>
+            </svg>
+            <span>Sessions</span>
+          </button>
+
+          <button class="modal-close-btn" id="adminModalClose">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+            Fermer
+          </button>
+        </div>
+
+        <!-- Body panels -->
+        <div class="modal-body">
+
+          <!-- Panel: Profil -->
+          <div class="modal-panel active" id="modal-panel-profil">
+            <h2 class="admin-section-title">Profil utilisateur</h2>
+            <p class="admin-section-sub">Informations de votre compte</p>
+
+            <div class="admin-form-block">
+              <div class="form-row">
+                <div class="field-group">
+                  <label class="field-label">Nom d'utilisateur</label>
+                  <input type="text" class="field-input field-input-plain" id="profileUsername" readonly />
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Adresse email</label>
+                  <input type="email" class="field-input field-input-plain" id="profileEmail" placeholder="admin@example.com" />
+                </div>
+              </div>
+              <div class="admin-form-actions">
+                <button class="btn-primary" id="saveEmailBtn">Sauvegarder l'email</button>
+              </div>
+              <p class="admin-feedback" id="profileFeedback"></p>
+            </div>
+          </div>
+
+          <!-- Panel: Securite -->
+          <div class="modal-panel hidden" id="modal-panel-securite">
+            <h2 class="admin-section-title">Changer le mot de passe</h2>
+            <p class="admin-section-sub">Modifiez votre mot de passe de connexion</p>
+
+            <div class="admin-form-block">
+              <div class="field-group" style="margin-bottom:14px">
+                <label class="field-label">Mot de passe actuel</label>
+                <input type="password" class="field-input field-input-plain" id="currentPassword" placeholder="••••••••" />
+              </div>
+              <div class="form-row">
+                <div class="field-group">
+                  <label class="field-label">Nouveau mot de passe</label>
+                  <input type="password" class="field-input field-input-plain" id="newPassword" placeholder="••••••••" />
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Confirmer le mot de passe</label>
+                  <input type="password" class="field-input field-input-plain" id="confirmPassword" placeholder="••••••••" />
+                </div>
+              </div>
+              <div class="admin-form-actions">
+                <button class="btn-primary" id="changePasswordBtn">Changer le mot de passe</button>
+              </div>
+              <p class="admin-feedback" id="securiteFeedback"></p>
+            </div>
+          </div>
+
+          <div class="modal-panel hidden" id="modal-panel-a2f">
+            <h2 class="admin-section-title">Authentification a deux facteurs</h2>
+            <p class="admin-section-sub">Activez un TOTP via QR code pour proteger ce compte</p>
+
+            <div id="twoFaCards" class="twofa-cards-grid">
+              <div class="twofa-card-loading">Chargement...</div>
+            </div>
+          </div>
+
+          <!-- Panel: Users -->
+          <div class="modal-panel hidden" id="modal-panel-users">
+            <h2 class="admin-section-title">Utilisateurs locaux</h2>
+            <p class="admin-section-sub">Creez et gerez les comptes qui peuvent se connecter a cette machine</p>
+
+            <div class="admin-form-block">
+              <div class="form-row">
+                <div class="field-group">
+                  <label class="field-label">Nom d'utilisateur</label>
+                  <input type="text" class="field-input field-input-plain" id="newUserUsername" placeholder="operateur-01" />
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Adresse email</label>
+                  <input type="email" class="field-input field-input-plain" id="newUserEmail" placeholder="ops@example.com" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="field-group">
+                  <label class="field-label">Mot de passe</label>
+                  <input type="password" class="field-input field-input-plain" id="newUserPassword" placeholder="••••••••" />
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Role</label>
+                  <select class="field-input field-input-plain" id="newUserRole">
+                    <option value="operator">Operateur</option>
+                    <option value="admin">Administrateur</option>
+                  </select>
+                </div>
+              </div>
+              <div class="admin-form-actions">
+                <button class="btn-primary" id="createUserBtn">Creer l'utilisateur</button>
+              </div>
+              <p class="admin-feedback" id="usersFeedback"></p>
+            </div>
+
+            <div id="usersList" class="users-list">
+              <div class="sessions-loading">Chargement...</div>
+            </div>
+          </div>
+
+          <!-- Panel: Sessions -->
+          <div class="modal-panel hidden" id="modal-panel-sessions">
+            <h2 class="admin-section-title">Sessions actives</h2>
+            <p class="admin-section-sub">Gerez toutes vos sessions de connexion ouvertes</p>
+
+            <div id="sessionsList" class="sessions-list">
+              <!-- Rows injected by admin.js -->
+              <div class="sessions-loading">Chargement...</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="/app.js" defer></script>
+    <script src="/admin.js" defer></script>
   </body>
 </html>

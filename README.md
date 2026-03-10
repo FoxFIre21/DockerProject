@@ -24,6 +24,10 @@ L'usage recommande est de creer un environnement virtuel par machine pour isoler
 - utilisateur: `admin`
 - mot de passe: `docker123`
 
+Les comptes locaux sont ensuite stockes dans `users.json`. Depuis le bouton d'administration de l'interface, un administrateur peut creer d'autres utilisateurs pour cette machine.
+
+Chaque utilisateur peut aussi activer une A2F TOTP via QR code depuis l'administration.
+
 ## Mode Docker reel
 
 Si `docker` est disponible dans votre environnement, le tableau de bord pilote les conteneurs reels avec:

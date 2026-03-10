@@ -4,6 +4,7 @@ const state = {
   bootstrap: null,
   dashboard: null,
   selectedContainerId: "",
+  tempToken: "",
 };
 
 const el = {
@@ -31,6 +32,10 @@ const el = {
   actionFeedback: document.getElementById("actionFeedback"),
   composeBadge: document.getElementById("composeBadge"),
   logoutBtn: document.getElementById("logoutBtn"),
+  twoFaStep: document.getElementById("twoFaStep"),
+  twoFaCode: document.getElementById("twoFaCode"),
+  twoFaSubmit: document.getElementById("twoFaSubmit"),
+  twoFaFeedback: document.getElementById("twoFaFeedback"),
 };
 
 // ===== API =====
@@ -43,6 +48,9 @@ async function api(path, options = {}) {
   if (!response.ok) throw new Error(payload.error || "Erreur reseau.");
   return payload;
 }
+
+// Expose api globally so admin.js can reuse it
+window.api = api;
 
 // ===== HELPERS =====
 
@@ -227,6 +235,7 @@ function showApp(show) {
 function renderDashboard(payload) {
   state.dashboard = payload;
   state.user = payload.user || state.user;
+  window.appUser = state.user;
 
   const selectedContainer = syncSelectedContainer(payload.containers);
 
@@ -246,10 +255,10 @@ function renderDashboard(payload) {
 
 // ===== TABS =====
 
-document.querySelectorAll(".pve-tab").forEach((tab) => {
+document.querySelectorAll(".app-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".pve-tab").forEach((item) => item.classList.remove("active"));
-    document.querySelectorAll(".tab-content").forEach((content) => content.classList.add("hidden"));
+    document.querySelectorAll(".app-tab").forEach((item) => item.classList.remove("active"));
+    document.querySelectorAll(".tab-pane").forEach((content) => content.classList.add("hidden"));
     tab.classList.add("active");
     const target = document.getElementById("tab-" + tab.dataset.tab);
     if (target) target.classList.remove("hidden");
@@ -325,6 +334,56 @@ el.selectedContainerCard.addEventListener("click", (event) => {
 
 // ===== LOGIN =====
 
+function showTwoFaStep() {
+  el.loginForm.classList.add("hidden");
+  el.twoFaStep.classList.remove("hidden");
+  el.twoFaCode.value = "";
+  el.twoFaFeedback.textContent = "";
+  el.twoFaCode.focus();
+}
+
+function resetLoginStep() {
+  el.loginForm.classList.remove("hidden");
+  el.twoFaStep.classList.add("hidden");
+  state.tempToken = "";
+  el.twoFaCode.value = "";
+  el.twoFaFeedback.textContent = "";
+}
+
+el.twoFaSubmit.addEventListener("click", async () => {
+  const code = el.twoFaCode.value.trim();
+  if (!code) {
+    el.twoFaFeedback.textContent = "Saisissez le code.";
+    return;
+  }
+
+  el.twoFaFeedback.textContent = "Verification...";
+  el.twoFaFeedback.style.color = "";
+
+  try {
+    const payload = await api("/api/2fa/verify", {
+      method: "POST",
+      body: JSON.stringify({
+        temp_token: state.tempToken,
+        code,
+      }),
+    });
+
+    state.token = payload.token;
+    state.user = payload.user;
+    window.appUser = state.user;
+    localStorage.setItem("docker-panel-token", state.token);
+    resetLoginStep();
+    el.loginFeedback.textContent = "";
+    showApp(true);
+    await refreshDashboard();
+    if (typeof window.initAdmin === "function") window.initAdmin();
+  } catch (error) {
+    el.twoFaFeedback.textContent = error.message;
+    el.twoFaFeedback.style.color = "var(--red)";
+  }
+});
+
 el.loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   el.loginFeedback.textContent = "Connexion en cours...";
@@ -339,12 +398,21 @@ el.loginForm.addEventListener("submit", async (event) => {
       }),
     });
 
+    if (payload["2fa_required"]) {
+      state.tempToken = payload.temp_token || "";
+      el.loginFeedback.textContent = "";
+      showTwoFaStep();
+      return;
+    }
+
     state.token = payload.token;
     state.user = payload.user;
+    window.appUser = state.user;
     localStorage.setItem("docker-panel-token", state.token);
     el.loginFeedback.textContent = "";
     showApp(true);
     await refreshDashboard();
+    if (typeof window.initAdmin === "function") window.initAdmin();
   } catch (error) {
     el.loginFeedback.textContent = error.message;
     el.loginFeedback.style.color = "var(--red)";
@@ -360,12 +428,17 @@ el.logoutBtn.addEventListener("click", async () => {
 
   state.token = "";
   state.user = null;
+  window.appUser = null;
   state.dashboard = null;
   state.selectedContainerId = "";
+  state.tempToken = "";
   localStorage.removeItem("docker-panel-token");
+  resetLoginStep();
   showApp(false);
   setFeedback("");
 });
+
+// adminBtn click is handled by admin.js once initAdmin() is called
 
 // ===== BOOTSTRAP / INIT =====
 
@@ -386,6 +459,7 @@ async function init() {
   try {
     await refreshDashboard();
     showApp(true);
+    if (typeof window.initAdmin === "function") window.initAdmin();
   } catch (_) {
     localStorage.removeItem("docker-panel-token");
     state.token = "";
