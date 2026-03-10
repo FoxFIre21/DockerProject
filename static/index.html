@@ -3,96 +3,254 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Docker Control Room</title>
+    <title>Docker Manager</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="background-orb orb-a"></div>
-    <div class="background-orb orb-b"></div>
 
-    <main class="shell">
-      <section class="login-panel card" id="loginPanel">
-        <div class="eyebrow">Acces securise</div>
-        <h1>Docker Control Room</h1>
-        <p class="lead">
-          Connecte-toi pour surveiller et lancer l'ensemble des machines depuis une seule page web.
-        </p>
-
-        <div class="mode-chip" id="modeChip">Chargement...</div>
-
-        <form id="loginForm" class="form">
-          <label>
-            <span>Utilisateur</span>
-            <input id="username" name="username" type="text" autocomplete="username" required />
-          </label>
-          <label>
-            <span>Mot de passe</span>
-            <input id="password" name="password" type="password" autocomplete="current-password" required />
-          </label>
-          <button type="submit" class="primary-button">Se connecter</button>
-        </form>
-
-        <div class="hint" id="credentialsHint"></div>
-        <p class="feedback" id="loginFeedback"></p>
-      </section>
-
-      <section class="dashboard hidden" id="dashboard">
-        <header class="topbar card">
+    <!-- ===== LOGIN ===== -->
+    <div id="loginPanel" class="login-overlay">
+      <div class="login-box">
+        <div class="login-logo">
+          <svg class="login-logo-icon" viewBox="0 0 24 24" fill="none">
+            <rect x="3"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
+            <rect x="8"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
+            <rect x="13" y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
+            <rect x="3"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
+            <rect x="8"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
+            <path d="M18 6v12M3 7h15" stroke="#0db7ed" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
           <div>
-            <div class="eyebrow">Centre de commande</div>
-            <h2>Vue d'ensemble des machines</h2>
-            <p class="lead small" id="welcomeLine"></p>
+            <div class="login-title">Docker Manager</div>
+            <div class="login-subtitle">Proxmox-style Container Interface</div>
           </div>
-          <div class="topbar-actions">
-            <div class="mode-chip" id="dashboardMode">Mode</div>
-            <button id="logoutButton" class="ghost-button">Deconnexion</button>
+        </div>
+
+        <div class="login-form-wrap">
+          <div class="login-mode-row" id="modeChip">Chargement...</div>
+
+          <form id="loginForm">
+            <div class="form-group">
+              <label class="form-label">Utilisateur</label>
+              <input id="username" name="username" type="text" class="form-input"
+                autocomplete="username" placeholder="admin" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mot de passe</label>
+              <input id="password" name="password" type="password" class="form-input"
+                autocomplete="current-password" placeholder="••••••••" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Realm</label>
+              <select class="form-input form-select">
+                <option>Docker Auth</option>
+              </select>
+            </div>
+            <div class="login-feedback" id="loginFeedback"></div>
+            <button type="submit" class="btn-login">Se connecter</button>
+          </form>
+
+          <div class="login-hint" id="credentialsHint"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MAIN APP ===== -->
+    <div id="app" class="hidden">
+
+      <!-- HEADER -->
+      <header class="pve-header">
+        <div class="pve-header-logo">
+          <svg class="header-logo-icon" viewBox="0 0 24 24" fill="none">
+            <rect x="3"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
+            <rect x="8"  y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
+            <rect x="13" y="8"  width="4" height="4" rx="0.5" fill="#0db7ed"/>
+            <rect x="3"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
+            <rect x="8"  y="13" width="4" height="4" rx="0.5" fill="#0db7ed" opacity=".5"/>
+            <path d="M18 6v12M3 7h15" stroke="#0db7ed" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span class="header-logo-text">Docker Manager</span>
+        </div>
+
+        <div class="pve-header-center" id="headerStats">
+          <!-- Stats chips injected by JS -->
+        </div>
+
+        <div class="pve-header-right">
+          <span class="header-mode-chip" id="headerMode">—</span>
+          <span class="header-user" id="headerUser"></span>
+          <button class="btn-header-logout" id="logoutBtn">Deconnexion</button>
+        </div>
+      </header>
+
+      <!-- BODY -->
+      <div class="pve-body">
+
+        <!-- SIDEBAR -->
+        <nav class="pve-sidebar">
+          <div class="sidebar-section-title">Datacenter</div>
+
+          <div class="sidebar-node" id="sidebarHostNode">
+            <span class="sidebar-node-icon">&#9654;</span>
+            <svg class="sidebar-node-img" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 4a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V4zM2 10a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zM4 16a2 2 0 012-2h8a2 2 0 012 2v.5a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5V16z"/>
+            </svg>
+            <span class="sidebar-node-label">docker-host</span>
           </div>
-        </header>
 
-        <section class="stats-grid" id="statsGrid"></section>
+          <div class="sidebar-tree" id="sidebarTree">
+            <!-- Container items injected by JS -->
+          </div>
 
-        <section class="workspace">
-          <div class="card action-panel">
-            <div class="section-head">
-              <div>
-                <div class="eyebrow">Actions globales</div>
-                <h3>Executer toutes les machines</h3>
+          <div class="sidebar-divider"></div>
+
+          <div class="sidebar-section-title">Actions globales</div>
+          <div class="sidebar-actions">
+            <button class="btn-sidebar start" id="startAllBtn">&#9654; Demarrer tout</button>
+            <button class="btn-sidebar restart" id="restartAllBtn">&#8635; Redemarrer tout</button>
+            <button class="btn-sidebar stop" id="stopAllBtn">&#9632; Arreter tout</button>
+            <button class="btn-sidebar deploy" id="deployBtn">&#8853; Deployer stack</button>
+          </div>
+
+          <div class="sidebar-compose-badge" id="composeBadge">—</div>
+        </nav>
+
+        <!-- MAIN CONTENT -->
+        <main class="pve-main">
+
+          <!-- TABS -->
+          <div class="pve-tabs">
+            <button class="pve-tab active" data-tab="summary">
+              <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1 2a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H2a1 1 0 01-1-1V2zM1 7a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H2a1 1 0 01-1-1V7zM1 12a1 1 0 011-1h5a1 1 0 010 2H2a1 1 0 01-1-1z"/>
+              </svg>
+              Sommaire
+            </button>
+            <button class="pve-tab" data-tab="containers">
+              <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M14 1a1 1 0 011 1v12a1 1 0 01-1 1H2a1 1 0 01-1-1V2a1 1 0 011-1h12zM2 0a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V2a2 2 0 00-2-2H2z"/>
+                <path d="M14 5H2V4h12v1zm0 3H2V7h12v1zm0 3H8v-1h6v1z"/>
+              </svg>
+              Conteneurs
+            </button>
+            <button class="pve-tab" data-tab="logs">
+              <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1.5 1.5A.5.5 0 012 1h12a.5.5 0 01.5.5v2A.5.5 0 0114 4H2a.5.5 0 01-.5-.5v-2zm0 4A.5.5 0 012 5h5a.5.5 0 010 1H2a.5.5 0 01-.5-.5v-.5zm0 2A.5.5 0 012 7h5a.5.5 0 010 1H2a.5.5 0 01-.5-.5V7zm0 2A.5.5 0 012 9h5a.5.5 0 010 1H2a.5.5 0 01-.5-.5V9zm6 0A.5.5 0 018 9h5a.5.5 0 010 1H8a.5.5 0 01-.5-.5V9z"/>
+              </svg>
+              Journal
+            </button>
+          </div>
+
+          <!-- TAB: SUMMARY -->
+          <div class="tab-content" id="tab-summary">
+            <div class="summary-grid">
+
+              <div class="pve-panel">
+                <div class="pve-panel-header">Vue d'ensemble</div>
+                <div class="pve-panel-body">
+                  <div class="stat-row">
+                    <span class="stat-row-label">Total conteneurs</span>
+                    <span class="stat-row-value" id="statTotal">—</span>
+                  </div>
+                  <div class="stat-row">
+                    <span class="stat-row-label">En execution</span>
+                    <span class="stat-row-value text-green" id="statRunning">—</span>
+                  </div>
+                  <div class="stat-row">
+                    <span class="stat-row-label">Arretes</span>
+                    <span class="stat-row-value text-muted" id="statStopped">—</span>
+                  </div>
+                  <div class="stat-row">
+                    <span class="stat-row-label">A surveiller</span>
+                    <span class="stat-row-value text-orange" id="statDegraded">—</span>
+                  </div>
+                </div>
               </div>
-              <span class="soft-badge" id="composeBadge">Compose non detecte</span>
-            </div>
 
-            <div class="action-buttons">
-              <button class="primary-button" data-action="start-all">Demarrer tout</button>
-              <button class="secondary-button" data-action="restart-all">Redemarrer tout</button>
-              <button class="secondary-button danger" data-action="stop-all">Arreter tout</button>
-              <button class="secondary-button" data-action="deploy-stack">Deployer la stack</button>
-            </div>
+              <div class="pve-panel">
+                <div class="pve-panel-header">Actions rapides</div>
+                <div class="pve-panel-body">
+                  <div class="action-btn-grid">
+                    <button class="btn-action start" data-action="start-all">&#9654; Demarrer tout</button>
+                    <button class="btn-action restart" data-action="restart-all">&#8635; Redemarrer tout</button>
+                    <button class="btn-action stop" data-action="stop-all">&#9632; Arreter tout</button>
+                    <button class="btn-action deploy" data-action="deploy-stack">&#8853; Deployer stack</button>
+                  </div>
+                  <div class="action-feedback" id="actionFeedback"></div>
+                </div>
+              </div>
 
-            <p class="feedback" id="actionFeedback"></p>
+              <div class="pve-panel summary-wide">
+                <div class="pve-panel-header">Etat rapide des conteneurs</div>
+                <div class="pve-panel-body">
+                  <div class="quick-containers" id="quickContainers">
+                    <!-- Quick container rows injected by JS -->
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
 
-          <div class="card log-panel">
-            <div class="section-head">
-              <div>
-                <div class="eyebrow">Activite recente</div>
-                <h3>Journal systeme</h3>
+          <!-- TAB: CONTAINERS -->
+          <div class="tab-content hidden" id="tab-containers">
+            <div class="pve-panel full-height">
+              <div class="pve-panel-header">
+                Conteneurs Docker
+                <span class="panel-header-count" id="containerCount">0</span>
+              </div>
+              <div class="pve-panel-body no-pad">
+                <table class="pve-table">
+                  <thead>
+                    <tr>
+                      <th style="width:80px">Status</th>
+                      <th>Nom</th>
+                      <th>Image</th>
+                      <th style="width:100px">ID</th>
+                      <th style="width:90px">Sante</th>
+                      <th>Ports</th>
+                    </tr>
+                  </thead>
+                  <tbody id="containersTableBody">
+                    <!-- Populated by JS -->
+                  </tbody>
+                </table>
               </div>
             </div>
-            <ul class="log-list" id="activityList"></ul>
           </div>
-        </section>
 
-        <section class="card">
-          <div class="section-head">
-            <div>
-              <div class="eyebrow">Machines</div>
-              <h3>Etat des conteneurs</h3>
+          <!-- TAB: LOGS -->
+          <div class="tab-content hidden" id="tab-logs">
+            <div class="pve-panel full-height">
+              <div class="pve-panel-header">
+                Journal d'activite
+                <span class="live-indicator">
+                  <span class="live-dot"></span>
+                  Live
+                </span>
+              </div>
+              <div class="pve-panel-body no-pad">
+                <div class="log-list" id="activityList">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
             </div>
           </div>
-          <div class="machines-grid" id="machinesGrid"></div>
-        </section>
-      </section>
-    </main>
+
+        </main>
+      </div>
+
+      <!-- STATUS BAR -->
+      <div class="pve-statusbar">
+        <span class="statusbar-live">
+          <span class="live-dot"></span>
+          Connecte
+        </span>
+        <span class="statusbar-sep">|</span>
+        <span id="statusUser"></span>
+      </div>
+
+    </div>
 
     <script src="/app.js" defer></script>
   </body>
