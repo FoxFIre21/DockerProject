@@ -9,13 +9,13 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from mimetypes import guess_type
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
-HOST = "127.0.0.1"
-PORT = int(os.environ.get("PORT", "8000"))
+HOST = "0.0.0.0"
+PORT = int(os.environ.get("PORT", "9510"))
 AUTH_USER = os.environ.get("APP_USER", "admin")
 AUTH_PASSWORD = os.environ.get("APP_PASSWORD", "docker123")
 
@@ -238,9 +238,47 @@ def perform_demo_action(action):
     raise ValueError("Action inconnue")
 
 
+def demo_container_by_id(container_id):
+    for item in DEMO_CONTAINERS:
+        if item["id"] == container_id:
+            return item
+    raise LookupError("Machine introuvable.")
+
+
+def perform_demo_container_action(container_id, action):
+    item = demo_container_by_id(container_id)
+
+    if action == "start":
+        item["status"] = "running"
+        item["health"] = "healthy"
+        push_log(f"Machine de demo {item['name']} demarree.")
+        return f"{item['name']} demarree."
+
+    if action == "stop":
+        item["status"] = "exited"
+        item["health"] = "offline"
+        push_log(f"Machine de demo {item['name']} arretee.")
+        return f"{item['name']} arretee."
+
+    if action == "restart":
+        item["status"] = "running"
+        item["health"] = "healthy"
+        push_log(f"Machine de demo {item['name']} redemarree.")
+        return f"{item['name']} redemarree."
+
+    raise ValueError("Action inconnue")
+
+
 def docker_ids():
     containers = docker_containers()
     return [item["id"] for item in containers]
+
+
+def docker_container(container_id):
+    for item in docker_containers():
+        if item["id"] == container_id or item["name"] == container_id:
+            return item
+    raise LookupError("Machine introuvable.")
 
 
 def perform_docker_action(action):
@@ -278,6 +316,33 @@ def perform_docker_action(action):
             raise RuntimeError(result.stderr.strip() or "Le deploiement compose a echoue.")
         push_log(f"Stack Docker deployee depuis {compose.name}.")
         return f"Stack deployee depuis {compose.name}."
+
+    raise ValueError("Action inconnue")
+
+
+def perform_docker_container_action(container_id, action):
+    container = docker_container(container_id)
+
+    if action == "start":
+        result = run_command(["docker", "start", container["id"]])
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "Le demarrage a echoue.")
+        push_log(f"Machine Docker {container['name']} demarree.")
+        return f"{container['name']} demarree."
+
+    if action == "stop":
+        result = run_command(["docker", "stop", container["id"]])
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "L'arret a echoue.")
+        push_log(f"Machine Docker {container['name']} arretee.")
+        return f"{container['name']} arretee."
+
+    if action == "restart":
+        result = run_command(["docker", "restart", container["id"]])
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "Le redemarrage a echoue.")
+        push_log(f"Machine Docker {container['name']} redemarree.")
+        return f"{container['name']} redemarree."
 
     raise ValueError("Action inconnue")
 
@@ -332,6 +397,8 @@ class AppHandler(BaseHTTPRequestHandler):
             return self.handle_login()
         if parsed.path == "/api/logout":
             return self.handle_logout()
+        if parsed.path.startswith("/api/containers/"):
+            return self.handle_container_route(parsed.path)
         if parsed.path.startswith("/api/actions/"):
             return self.handle_action(parsed.path.rsplit("/", 1)[-1])
         return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Route inconnue."})
@@ -376,6 +443,37 @@ class AppHandler(BaseHTTPRequestHandler):
                 message = perform_demo_action(action)
         except ValueError:
             return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Action inconnue."})
+        except RuntimeError as exc:
+            push_log(str(exc))
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+
+        payload = dashboard_payload()
+        payload["message"] = message
+        payload["user"] = user
+        return json_response(self, HTTPStatus.OK, payload)
+
+    def handle_container_route(self, path):
+        parts = path.strip("/").split("/")
+        if len(parts) != 5 or parts[:2] != ["api", "containers"] or parts[3] != "actions":
+            return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Route inconnue."})
+        container_id = unquote(parts[2])
+        action = unquote(parts[4])
+        return self.handle_container_action(container_id, action)
+
+    def handle_container_action(self, container_id, action):
+        user = user_from_token(self.headers)
+        if not user:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+
+        try:
+            if docker_mode():
+                message = perform_docker_container_action(container_id, action)
+            else:
+                message = perform_demo_container_action(container_id, action)
+        except ValueError:
+            return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Action inconnue."})
+        except LookupError as exc:
+            return json_response(self, HTTPStatus.NOT_FOUND, {"error": str(exc)})
         except RuntimeError as exc:
             push_log(str(exc))
             return json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})

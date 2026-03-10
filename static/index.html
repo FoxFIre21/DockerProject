@@ -49,8 +49,6 @@
             <div class="login-feedback" id="loginFeedback"></div>
             <button type="submit" class="btn-login">Se connecter</button>
           </form>
-
-          <div class="login-hint" id="credentialsHint"></div>
         </div>
       </div>
     </div>
@@ -180,6 +178,13 @@
                 </div>
               </div>
 
+              <div class="pve-panel">
+                <div class="pve-panel-header">Machine selectionnee</div>
+                <div class="pve-panel-body">
+                  <div id="selectedContainerCard"></div>
+                </div>
+              </div>
+
               <div class="pve-panel summary-wide">
                 <div class="pve-panel-header">Etat rapide des conteneurs</div>
                 <div class="pve-panel-body">
@@ -209,6 +214,7 @@
                       <th style="width:100px">ID</th>
                       <th style="width:90px">Sante</th>
                       <th>Ports</th>
+                      <th style="width:220px">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="containersTableBody">
