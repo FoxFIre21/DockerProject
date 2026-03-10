@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import json
 import os
-import random
 import re
 import secrets
 import shutil
@@ -25,6 +24,7 @@ HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "9510"))
 AUTH_USER = os.environ.get("APP_USER", "admin")
 AUTH_PASSWORD = os.environ.get("APP_PASSWORD", "docker123")
+ROLE_LEVELS = {"user": 0, "operator": 1, "admin": 2}
 
 SESSIONS = {}  # token -> {"username": str, "created_at": float, "ip": str}
 PENDING_2FA = {}  # temp_token -> {"username": str, "expires": float}
@@ -82,7 +82,7 @@ def hash_password(password, salt=None):
     }
 
 
-def make_user(username, password, role="operator", email=""):
+def make_user(username, password, role="user", email=""):
     password_data = hash_password(password)
     return {
         "username": username,
@@ -117,6 +117,49 @@ def validate_username(username):
     return bool(re.fullmatch(r"[A-Za-z0-9._-]{3,32}", username))
 
 
+def normalize_role(role, default="user"):
+    role = str(role or "").strip().lower()
+    return role if role in ROLE_LEVELS else default
+
+
+def role_level(role):
+    return ROLE_LEVELS.get(normalize_role(role), -1)
+
+
+def can_manage_users(actor):
+    return bool(actor and role_level(actor.get("role")) >= ROLE_LEVELS["operator"])
+
+
+def can_manage_target(actor, target):
+    if not actor or not target:
+        return False
+    return role_level(actor.get("role")) > role_level(target.get("role"))
+
+
+def allowed_creation_roles(actor):
+    actor_role = normalize_role(actor.get("role"))
+    if actor_role == "admin":
+        return ["user", "operator", "admin"]
+    if actor_role == "operator":
+        return ["user"]
+    return []
+
+
+def allowed_role_updates(actor, target):
+    if not can_manage_target(actor, target):
+        return []
+    actor_role = normalize_role(actor.get("role"))
+    target_role = normalize_role(target.get("role"))
+    if actor_role == "admin":
+        if target_role == "operator":
+            return ["user", "operator", "admin"]
+        if target_role == "user":
+            return ["user", "operator", "admin"]
+    if actor_role == "operator" and target_role == "user":
+        return ["user"]
+    return []
+
+
 def save_users():
     payload = {"users": sorted(USERS.values(), key=lambda item: item["username"].lower())}
     USERS_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -137,7 +180,7 @@ def load_users():
                 "username": username,
                 "password": str(item.get("password", "")),
                 "salt": str(item.get("salt", "")),
-                "role": str(item.get("role", "operator")),
+                "role": normalize_role(item.get("role", "user")),
                 "email": str(item.get("email", "")),
                 "totp_enabled": bool(item.get("totp_enabled", False)),
                 "totp_secret": str(item.get("totp_secret", "")),
@@ -173,11 +216,6 @@ def current_user_record(headers):
     return USERS.get(session.get("username", ""))
 
 
-def current_user_is_admin(headers):
-    user = current_user_record(headers)
-    return bool(user and user.get("role") == "admin")
-
-
 def admin_count():
     return sum(1 for user in USERS.values() if user.get("role") == "admin")
 
@@ -210,12 +248,6 @@ def verify_totp(secret, code):
         secrets.compare_digest(totp_code(secret, t + d), str(code).zfill(6))
         for d in (-1, 0, 1)
     )
-
-
-def generate_otp():
-    """Generate a random 6-digit OTP code."""
-    return str(random.randint(100000, 999999))
-
 
 # ===== LOGGING =====
 
@@ -606,9 +638,15 @@ class AppHandler(BaseHTTPRequestHandler):
             return json_response(self, HTTPStatus.OK, public_user(user))
 
         if parsed.path == "/api/admin/users":
-            if not current_user_is_admin(self.headers):
-                return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces admin requis."})
-            users = [public_user(user) for user in sorted(USERS.values(), key=lambda item: item["username"].lower())]
+            actor = current_user_record(self.headers)
+            if not can_manage_users(actor):
+                return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces de gestion requis."})
+            users = []
+            for user in sorted(USERS.values(), key=lambda item: item["username"].lower()):
+                item = public_user(user)
+                item["manageable"] = can_manage_target(actor, user)
+                item["assignable_roles"] = allowed_role_updates(actor, user)
+                users.append(item)
             return json_response(self, HTTPStatus.OK, {"users": users})
 
         return self.serve_static(parsed.path)
@@ -641,6 +679,9 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/admin/users":
             return self.handle_admin_user_create()
+
+        if parsed.path == "/api/admin/users/role":
+            return self.handle_admin_user_role_update()
 
         if parsed.path == "/api/admin/users/delete":
             return self.handle_admin_user_delete()
@@ -822,14 +863,14 @@ class AppHandler(BaseHTTPRequestHandler):
         actor = current_user_record(self.headers)
         if not actor:
             return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
-        if actor.get("role") != "admin":
-            return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces admin requis."})
+        if not can_manage_users(actor):
+            return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces de gestion requis."})
 
         payload = load_json(self)
         username = payload.get("username", "").strip()
         password = payload.get("password", "")
         email = payload.get("email", "").strip()
-        role = payload.get("role", "operator").strip() or "operator"
+        role = normalize_role(payload.get("role", "user"), default="user")
 
         if not validate_username(username):
             return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Nom d'utilisateur invalide. Utilisez 3 a 32 caracteres: lettres, chiffres, point, tiret ou underscore."})
@@ -837,20 +878,51 @@ class AppHandler(BaseHTTPRequestHandler):
             return json_response(self, HTTPStatus.CONFLICT, {"error": "Cet utilisateur existe deja."})
         if len(password) < 6:
             return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Le mot de passe doit contenir au moins 6 caracteres."})
-        if role not in {"admin", "operator"}:
-            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Role invalide."})
+        if role not in allowed_creation_roles(actor):
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Vous ne pouvez pas creer ce role."})
 
         USERS[username] = make_user(username, password, role=role, email=email)
         save_users()
         push_log(f"Utilisateur {username} cree par {actor['username']}.")
         return json_response(self, HTTPStatus.OK, {"ok": True, "user": public_user(USERS[username])})
 
+    def handle_admin_user_role_update(self):
+        actor = current_user_record(self.headers)
+        if not actor:
+            return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
+        if not can_manage_users(actor):
+            return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces de gestion requis."})
+
+        payload = load_json(self)
+        username = payload.get("username", "").strip()
+        new_role = normalize_role(payload.get("role", "user"), default="user")
+        target = USERS.get(username)
+
+        if not target:
+            return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Utilisateur introuvable."})
+        if username == actor["username"]:
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Impossible de modifier votre propre role."})
+        if new_role not in allowed_role_updates(actor, target):
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Vous ne pouvez pas attribuer ce role a cet utilisateur."})
+
+        old_role = target.get("role", "user")
+        if old_role == new_role:
+            return json_response(self, HTTPStatus.OK, {"ok": True, "user": public_user(target)})
+
+        target["role"] = new_role
+        save_users()
+        for session in SESSIONS.values():
+            if session.get("username") == username:
+                session["role"] = new_role
+        push_log(f"Role de {username} change de {old_role} vers {new_role} par {actor['username']}.")
+        return json_response(self, HTTPStatus.OK, {"ok": True, "user": public_user(target)})
+
     def handle_admin_user_delete(self):
         actor = current_user_record(self.headers)
         if not actor:
             return json_response(self, HTTPStatus.UNAUTHORIZED, {"error": "Authentification requise."})
-        if actor.get("role") != "admin":
-            return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces admin requis."})
+        if not can_manage_users(actor):
+            return json_response(self, HTTPStatus.FORBIDDEN, {"error": "Acces de gestion requis."})
 
         payload = load_json(self)
         username = payload.get("username", "").strip()
@@ -858,6 +930,8 @@ class AppHandler(BaseHTTPRequestHandler):
             return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Utilisateur introuvable."})
         if username == actor["username"]:
             return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Impossible de supprimer votre propre compte."})
+        if not can_manage_target(actor, USERS[username]):
+            return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Vous ne pouvez pas supprimer cet utilisateur."})
         if USERS[username].get("role") == "admin" and admin_count() <= 1:
             return json_response(self, HTTPStatus.BAD_REQUEST, {"error": "Impossible de supprimer le dernier administrateur."})
 

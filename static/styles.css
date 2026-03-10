@@ -1615,6 +1615,12 @@ html, body {
   color: var(--green);
 }
 
+.status-badge.pending {
+  background: rgba(251,191,36,0.12);
+  border-color: rgba(251,191,36,0.24);
+  color: #fbbf24;
+}
+
 .status-badge.inactive {
   background: rgba(71,85,105,0.2);
   border-color: rgba(71,85,105,0.3);
@@ -1812,6 +1818,10 @@ html, body {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.user-role-select {
+  min-width: 148px;
 }
 
 .user-row-static {

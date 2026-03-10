@@ -24,9 +24,14 @@ L'usage recommande est de creer un environnement virtuel par machine pour isoler
 - utilisateur: `admin`
 - mot de passe: `docker123`
 
-Les comptes locaux sont ensuite stockes dans `users.json`. Depuis le bouton d'administration de l'interface, un administrateur peut creer d'autres utilisateurs pour cette machine.
+Les comptes locaux sont ensuite stockes dans `users.json`. Depuis le bouton d'administration de l'interface, les comptes de gestion peuvent creer d'autres utilisateurs selon leur niveau de role.
 
 Chaque utilisateur peut aussi activer une A2F TOTP via QR code depuis l'administration.
+
+Hierarchie des roles:
+- `admin`: gere tous les comptes
+- `operator`: gere uniquement les comptes `user`
+- `user`: acces standard sans gestion des autres comptes
 
 ## Mode Docker reel
 

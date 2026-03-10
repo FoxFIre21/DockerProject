@@ -5,7 +5,8 @@
     open: false,
     activeTab: "profil",
     initialized: false,
-    isAdmin: false,
+    canManageUsers: false,
+    currentRole: "user",
   };
 
   function getEl(id) {
@@ -42,13 +43,32 @@
     }
   }
 
-  function applyAdminAccess(isAdmin) {
-    adminState.isAdmin = isAdmin;
+  function roleLabel(role) {
+    return {
+      admin: "Administrateur",
+      operator: "Operateur",
+      user: "Utilisateur",
+    }[role] || role;
+  }
+
+  function applyManagementAccess(role) {
+    adminState.currentRole = role || "user";
+    adminState.canManageUsers = role === "admin" || role === "operator";
     const usersTab = document.querySelector('[data-modal-tab="users"]');
     const usersPanel = getEl("modal-panel-users");
+    const roleSelect = getEl("newUserRole");
 
-    if (usersTab) usersTab.classList.toggle("hidden", !isAdmin);
-    if (usersPanel && !isAdmin && adminState.activeTab === "users") {
+    if (usersTab) usersTab.classList.toggle("hidden", !adminState.canManageUsers);
+    if (roleSelect) {
+      roleSelect.innerHTML = role === "admin"
+        ? `
+          <option value="user">Utilisateur</option>
+          <option value="operator">Operateur</option>
+          <option value="admin">Administrateur</option>
+        `
+        : '<option value="user">Utilisateur</option>';
+    }
+    if (usersPanel && !adminState.canManageUsers && adminState.activeTab === "users") {
       switchTab("profil");
     }
   }
@@ -88,7 +108,7 @@
   function openAdmin() {
     const modal = getEl("adminModal");
     if (!modal) return;
-    applyAdminAccess(window.appUser?.role === "admin");
+    applyManagementAccess(window.appUser?.role || "user");
     modal.classList.remove("hidden");
     adminState.open = true;
     switchTab(adminState.activeTab);
@@ -102,7 +122,7 @@
   }
 
   function switchTab(tabName) {
-    if (tabName === "users" && !adminState.isAdmin) {
+    if (tabName === "users" && !adminState.canManageUsers) {
       tabName = "profil";
     }
 
@@ -134,7 +154,7 @@
       const data = await adminApi("/api/account");
       getEl("profileUsername").value = data.username || "";
       getEl("profileEmail").value = data.email || "";
-      applyAdminAccess(data.role === "admin");
+      applyManagementAccess(data.role || "user");
     } catch (error) {
       setFeedback("profileFeedback", error.message, "error");
     }
@@ -343,8 +363,8 @@
     const container = getEl("usersList");
     if (!container) return;
 
-    if (!adminState.isAdmin) {
-      container.innerHTML = '<div class="sessions-loading">Acces admin requis.</div>';
+    if (!adminState.canManageUsers) {
+      container.innerHTML = '<div class="sessions-loading">Acces de gestion requis.</div>';
       return;
     }
 
@@ -372,18 +392,28 @@
         <div class="user-row-main">
           <div class="user-row-title">
             <span>${escapeHtml(user.username)}</span>
-            <span class="status-badge ${user.role === "admin" ? "active" : "inactive"}">${escapeHtml(user.role)}</span>
+            <span class="status-badge ${user.role === "admin" ? "active" : user.role === "operator" ? "pending" : "inactive"}">${escapeHtml(roleLabel(user.role))}</span>
           </div>
           <div class="user-row-meta">${escapeHtml(user.email || "Aucun email")}</div>
         </div>
         <div class="user-row-actions">
-          ${user.role === "admin"
-            ? '<span class="btn-ghost user-row-static">Admin</span>'
-            : `<button class="btn-danger" data-delete-user="${escapeHtml(user.username)}">Supprimer</button>`
+          ${Array.isArray(user.assignable_roles) && user.assignable_roles.length
+            ? `<select class="field-input field-input-plain user-role-select" data-role-user="${escapeHtml(user.username)}">
+                ${user.assignable_roles.map((role) => `<option value="${escapeHtml(role)}"${role === user.role ? " selected" : ""}>${escapeHtml(roleLabel(role))}</option>`).join("")}
+              </select>`
+            : `<span class="btn-ghost user-row-static">${user.manageable ? escapeHtml(roleLabel(user.role)) : "Verrouille"}</span>`
+          }
+          ${user.manageable
+            ? `<button class="btn-danger" data-delete-user="${escapeHtml(user.username)}">Supprimer</button>`
+            : ""
           }
         </div>
       </div>
     `).join("");
+
+    container.querySelectorAll("[data-role-user]").forEach((select) => {
+      select.addEventListener("change", () => updateUserRole(select.dataset.roleUser, select.value));
+    });
 
     container.querySelectorAll("[data-delete-user]").forEach((btn) => {
       btn.addEventListener("click", () => deleteUser(btn.dataset.deleteUser));
@@ -391,15 +421,15 @@
   }
 
   async function createUser() {
-    if (!adminState.isAdmin) {
-      setFeedback("usersFeedback", "Acces admin requis.", "error");
+    if (!adminState.canManageUsers) {
+      setFeedback("usersFeedback", "Acces de gestion requis.", "error");
       return;
     }
 
     const username = getEl("newUserUsername")?.value.trim() || "";
     const email = getEl("newUserEmail")?.value.trim() || "";
     const password = getEl("newUserPassword")?.value || "";
-    const role = getEl("newUserRole")?.value || "operator";
+    const role = getEl("newUserRole")?.value || "user";
 
     if (!username) {
       setFeedback("usersFeedback", "Nom d'utilisateur requis.", "error");
@@ -421,10 +451,24 @@
       getEl("newUserUsername").value = "";
       getEl("newUserEmail").value = "";
       getEl("newUserPassword").value = "";
-      getEl("newUserRole").value = "operator";
+      getEl("newUserRole").value = "user";
       loadUsers();
     } catch (error) {
       setFeedback("usersFeedback", error.message, "error");
+    }
+  }
+
+  async function updateUserRole(username, role) {
+    try {
+      await adminApi("/api/admin/users/role", {
+        method: "POST",
+        body: JSON.stringify({ username, role }),
+      });
+      setFeedback("usersFeedback", `Role de ${username} mis a jour.`, "success");
+      loadUsers();
+    } catch (error) {
+      setFeedback("usersFeedback", error.message, "error");
+      loadUsers();
     }
   }
 
