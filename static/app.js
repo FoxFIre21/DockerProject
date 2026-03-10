@@ -4,216 +4,240 @@ const state = {
   bootstrap: null,
 };
 
-const elements = {
-  loginPanel: document.getElementById("loginPanel"),
-  dashboard: document.getElementById("dashboard"),
-  loginForm: document.getElementById("loginForm"),
-  username: document.getElementById("username"),
-  password: document.getElementById("password"),
-  loginFeedback: document.getElementById("loginFeedback"),
-  credentialsHint: document.getElementById("credentialsHint"),
-  modeChip: document.getElementById("modeChip"),
-  dashboardMode: document.getElementById("dashboardMode"),
-  welcomeLine: document.getElementById("welcomeLine"),
-  statsGrid: document.getElementById("statsGrid"),
-  machinesGrid: document.getElementById("machinesGrid"),
-  activityList: document.getElementById("activityList"),
-  actionFeedback: document.getElementById("actionFeedback"),
-  logoutButton: document.getElementById("logoutButton"),
-  composeBadge: document.getElementById("composeBadge"),
+const el = {
+  loginPanel:        document.getElementById("loginPanel"),
+  app:               document.getElementById("app"),
+  loginForm:         document.getElementById("loginForm"),
+  username:          document.getElementById("username"),
+  password:          document.getElementById("password"),
+  loginFeedback:     document.getElementById("loginFeedback"),
+  credentialsHint:   document.getElementById("credentialsHint"),
+  modeChip:          document.getElementById("modeChip"),
+  headerMode:        document.getElementById("headerMode"),
+  headerUser:        document.getElementById("headerUser"),
+  headerStats:       document.getElementById("headerStats"),
+  statusUser:        document.getElementById("statusUser"),
+  sidebarTree:       document.getElementById("sidebarTree"),
+  statTotal:         document.getElementById("statTotal"),
+  statRunning:       document.getElementById("statRunning"),
+  statStopped:       document.getElementById("statStopped"),
+  statDegraded:      document.getElementById("statDegraded"),
+  quickContainers:   document.getElementById("quickContainers"),
+  containersTableBody: document.getElementById("containersTableBody"),
+  containerCount:    document.getElementById("containerCount"),
+  activityList:      document.getElementById("activityList"),
+  actionFeedback:    document.getElementById("actionFeedback"),
+  composeBadge:      document.getElementById("composeBadge"),
+  logoutBtn:         document.getElementById("logoutBtn"),
 };
 
+// ===== API =====
+
 async function api(path, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-
-  if (state.token) {
-    headers.Authorization = `Bearer ${state.token}`;
-  }
-
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
-
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  const response = await fetch(path, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || "Erreur reseau.");
-  }
+  if (!response.ok) throw new Error(payload.error || "Erreur reseau.");
   return payload;
 }
 
-function renderStats(summary) {
-  const stats = [
-    { label: "Machines totales", value: summary.total },
-    { label: "En execution", value: summary.running },
-    { label: "Arretees", value: summary.stopped },
-    { label: "A surveiller", value: summary.degraded },
-  ];
-
-  elements.statsGrid.innerHTML = stats
-    .map(
-      (item) => `
-        <article class="card stat-card">
-          <div class="stat-label">${item.label}</div>
-          <div class="stat-value">${item.value}</div>
-        </article>
-      `
-    )
-    .join("");
-}
+// ===== RENDER =====
 
 function pillClass(value) {
   return String(value || "").toLowerCase();
 }
 
-function renderMachines(containers) {
-  elements.machinesGrid.innerHTML = containers
-    .map(
-      (container) => `
-        <article class="machine-card">
-          <header>
-            <div>
-              <h4>${container.name}</h4>
-              <div class="machine-meta">
-                <div><strong>Image</strong> ${container.image}</div>
-                <div><strong>ID</strong> ${container.id}</div>
-              </div>
-            </div>
-            <div class="status-pill ${pillClass(container.status)}">${container.status}</div>
-          </header>
-          <div class="machine-meta">
-            <div><strong>Sante</strong> <span class="status-pill ${pillClass(container.health)}">${container.health}</span></div>
-            <div><strong>Ports</strong> ${container.ports || "-"}</div>
-            ${container.statusLabel ? `<div><strong>Etat brut</strong> ${container.statusLabel}</div>` : ""}
-          </div>
-        </article>
-      `
-    )
-    .join("");
+function renderStats(summary) {
+  el.statTotal.textContent   = summary.total;
+  el.statRunning.textContent = summary.running;
+  el.statStopped.textContent = summary.stopped;
+  el.statDegraded.textContent = summary.degraded;
+
+  el.headerStats.innerHTML = `
+    <span class="header-stat-chip">Total <span class="chip-val">${summary.total}</span></span>
+    <span class="header-stat-chip chip-green">Running <span class="chip-val">${summary.running}</span></span>
+    <span class="header-stat-chip">Stopped <span class="chip-val">${summary.stopped}</span></span>
+    ${summary.degraded > 0
+      ? `<span class="header-stat-chip chip-orange">Degraded <span class="chip-val">${summary.degraded}</span></span>`
+      : ""}
+  `;
+}
+
+function renderSidebar(containers) {
+  el.sidebarTree.innerHTML = containers.map(c => `
+    <div class="sidebar-item">
+      <span class="sidebar-status-dot ${pillClass(c.status)}"></span>
+      <span>${c.name}</span>
+    </div>
+  `).join("");
+}
+
+function renderQuickContainers(containers) {
+  el.quickContainers.innerHTML = containers.map(c => `
+    <div class="quick-item">
+      <span class="sidebar-status-dot ${pillClass(c.status)}"></span>
+      <span class="quick-item-name">${c.name}</span>
+      <span class="status-pill ${pillClass(c.status)}">${c.status}</span>
+      <span class="quick-item-image">${c.image}</span>
+    </div>
+  `).join("");
+}
+
+function renderTable(containers) {
+  el.containerCount.textContent = containers.length;
+  el.containersTableBody.innerHTML = containers.map(c => `
+    <tr>
+      <td><span class="status-pill ${pillClass(c.status)}">${c.status}</span></td>
+      <td><strong>${c.name}</strong></td>
+      <td class="td-mono">${c.image}</td>
+      <td class="td-mono">${c.id}</td>
+      <td><span class="status-pill ${pillClass(c.health)}">${c.health}</span></td>
+      <td class="td-mono">${c.ports || "—"}</td>
+    </tr>
+  `).join("");
 }
 
 function renderActivity(entries) {
-  elements.activityList.innerHTML = entries.map((item) => `<li>${item}</li>`).join("");
+  el.activityList.innerHTML = entries.map(item =>
+    `<div class="log-entry">${item}</div>`
+  ).join("");
 }
 
 function setMode(mode) {
   const label = mode === "docker" ? "Mode Docker reel" : "Mode demo";
-  elements.modeChip.textContent = label;
-  elements.dashboardMode.textContent = label;
+  el.modeChip.textContent  = label;
+  el.headerMode.textContent = label;
 }
 
-function setFeedback(target, message, isError = false) {
-  target.textContent = message || "";
-  target.style.color = isError ? "var(--warning)" : "var(--muted)";
+function setFeedback(message, isError = false) {
+  el.actionFeedback.textContent = message || "";
+  el.actionFeedback.className = "action-feedback" + (isError ? " error" : message ? " success" : "");
 }
 
-function showDashboard(show) {
-  elements.loginPanel.classList.toggle("hidden", show);
-  elements.dashboard.classList.toggle("hidden", !show);
+function showApp(show) {
+  el.loginPanel.classList.toggle("hidden", show);
+  el.app.classList.toggle("hidden", !show);
 }
 
 function renderDashboard(payload) {
   state.user = payload.user || state.user;
-  state.bootstrap = payload;
   renderStats(payload.summary);
-  renderMachines(payload.containers);
+  renderSidebar(payload.containers);
+  renderQuickContainers(payload.containers);
+  renderTable(payload.containers);
   renderActivity(payload.activity);
   setMode(payload.mode);
-  elements.composeBadge.textContent = payload.composeAvailable
-    ? "Compose detecte"
-    : "Compose non detecte";
-  elements.welcomeLine.textContent = `Connecte en tant que ${state.user?.username || "admin"} • ${
-    payload.mode === "docker" ? "actions reelles disponibles" : "actions de demonstration"
-  }`;
+
+  const username = state.user?.username || "admin";
+  el.headerUser.textContent = username;
+  el.statusUser.textContent = `${username} — ${payload.mode === "docker" ? "Docker reel" : "Demo"}`;
+  el.composeBadge.textContent = payload.composeAvailable ? "✓ Compose detecte" : "✗ Compose absent";
 }
 
-async function loadBootstrap() {
-  const payload = await api("/api/bootstrap", { method: "GET" });
-  setMode(payload.mode);
-  elements.username.value = payload.credentials.username;
-  elements.credentialsHint.innerHTML = `Identifiants par defaut: <code>${payload.credentials.username}</code> / <code>${payload.credentials.password}</code>`;
-  return payload;
+// ===== TABS =====
+
+document.querySelectorAll(".pve-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".pve-tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+    tab.classList.add("active");
+    const target = document.getElementById("tab-" + tab.dataset.tab);
+    if (target) target.classList.remove("hidden");
+  });
+});
+
+// ===== ACTIONS =====
+
+async function doAction(action) {
+  setFeedback("Execution en cours...");
+  try {
+    const payload = await api(`/api/actions/${action}`, { method: "POST" });
+    renderDashboard(payload);
+    setFeedback(payload.message || "Action terminee.");
+  } catch (error) {
+    setFeedback(error.message, true);
+  }
 }
 
-async function refreshDashboard() {
-  const payload = await api("/api/dashboard", { method: "GET" });
-  renderDashboard(payload);
-  return payload;
-}
+// Sidebar action buttons
+document.getElementById("startAllBtn").addEventListener("click",   () => doAction("start-all"));
+document.getElementById("restartAllBtn").addEventListener("click", () => doAction("restart-all"));
+document.getElementById("stopAllBtn").addEventListener("click",    () => doAction("stop-all"));
+document.getElementById("deployBtn").addEventListener("click",     () => doAction("deploy-stack"));
 
-elements.loginForm.addEventListener("submit", async (event) => {
+// Summary action buttons (data-action attribute)
+document.querySelectorAll("[data-action]").forEach(btn => {
+  btn.addEventListener("click", () => doAction(btn.dataset.action));
+});
+
+// ===== LOGIN =====
+
+el.loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  setFeedback(elements.loginFeedback, "Connexion en cours...");
+  el.loginFeedback.textContent = "Connexion en cours...";
+  el.loginFeedback.style.color = "";
 
   try {
     const payload = await api("/api/login", {
       method: "POST",
       body: JSON.stringify({
-        username: elements.username.value.trim(),
-        password: elements.password.value,
+        username: el.username.value.trim(),
+        password: el.password.value,
       }),
     });
 
     state.token = payload.token;
-    state.user = payload.user;
+    state.user  = payload.user;
     localStorage.setItem("docker-panel-token", state.token);
-    setFeedback(elements.loginFeedback, "");
-    showDashboard(true);
+    el.loginFeedback.textContent = "";
+    showApp(true);
     await refreshDashboard();
   } catch (error) {
-    setFeedback(elements.loginFeedback, error.message, true);
+    el.loginFeedback.textContent = error.message;
+    el.loginFeedback.style.color = "var(--red)";
   }
 });
 
-document.querySelectorAll("[data-action]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const action = button.dataset.action;
-    setFeedback(elements.actionFeedback, "Execution en cours...");
+// ===== LOGOUT =====
 
-    try {
-      const payload = await api(`/api/actions/${action}`, { method: "POST" });
-      renderDashboard(payload);
-      setFeedback(elements.actionFeedback, payload.message || "Action terminee.");
-    } catch (error) {
-      setFeedback(elements.actionFeedback, error.message, true);
-    }
-  });
-});
-
-elements.logoutButton.addEventListener("click", async () => {
-  try {
-    await api("/api/logout", { method: "POST" });
-  } catch (error) {
-    // ignore logout race or expired session
-  }
-
+el.logoutBtn.addEventListener("click", async () => {
+  try { await api("/api/logout", { method: "POST" }); } catch (_) {}
   state.token = "";
-  state.user = null;
+  state.user  = null;
   localStorage.removeItem("docker-panel-token");
-  showDashboard(false);
-  setFeedback(elements.actionFeedback, "");
+  showApp(false);
+  setFeedback("");
 });
+
+// ===== BOOTSTRAP / INIT =====
+
+async function loadBootstrap() {
+  const payload = await api("/api/bootstrap", { method: "GET" });
+  setMode(payload.mode);
+  el.username.value = payload.credentials.username;
+  el.credentialsHint.innerHTML =
+    `Identifiants: <code>${payload.credentials.username}</code> / <code>${payload.credentials.password}</code>`;
+}
+
+async function refreshDashboard() {
+  const payload = await api("/api/dashboard", { method: "GET" });
+  renderDashboard(payload);
+}
 
 async function init() {
   await loadBootstrap();
-
-  if (!state.token) {
-    return;
-  }
-
+  if (!state.token) return;
   try {
     await refreshDashboard();
-    showDashboard(true);
-  } catch (error) {
+    showApp(true);
+  } catch (_) {
     localStorage.removeItem("docker-panel-token");
     state.token = "";
-    showDashboard(false);
+    showApp(false);
   }
 }
 
-init().catch((error) => {
-  setFeedback(elements.loginFeedback, error.message, true);
+init().catch(err => {
+  el.loginFeedback.textContent = err.message;
 });
