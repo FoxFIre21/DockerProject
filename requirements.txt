@@ -1,0 +1,9 @@
+# Ce projet n'a pas de dependance Python externe.
+# Il utilise uniquement la bibliotheque standard.
+#
+# Installation recommandee sur chaque machine :
+#   python3 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# Python 3.8+ recommande.
