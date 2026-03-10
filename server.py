@@ -10,6 +10,7 @@ import secrets
 import shutil
 import struct
 import subprocess
+import sys
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -256,7 +257,10 @@ def build_qr_svg(text):
         import qrcode
         from qrcode.image.svg import SvgPathImage
     except ImportError as exc:
-        raise RuntimeError("Generation QR indisponible. Lancez `pip install -r requirements.txt`.") from exc
+        raise RuntimeError(
+            "Generation QR indisponible. Installez les dependances dans le Python actif: "
+            f"`{sys.executable} -m pip install -r requirements.txt`"
+        ) from exc
 
     buffer = io.BytesIO()
     image = qrcode.make(text, image_factory=SvgPathImage, box_size=8, border=2)
@@ -1073,6 +1077,7 @@ class AppHandler(BaseHTTPRequestHandler):
 def main():
     server = ThreadingHTTPServer((HOST, PORT), AppHandler)
     print(f"Serveur actif sur http://{HOST}:{PORT}")
+    print(f"Python actif: {sys.executable}")
     server.serve_forever()
 
 
