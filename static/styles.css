@@ -1664,6 +1664,11 @@ html, body {
   width: 180px;
   height: 180px;
   border-radius: 8px;
+  fill: #ffffff;
+}
+
+.twofa-qr-wrap svg path {
+  fill: #ffffff;
 }
 
 .twofa-qr-fallback {
