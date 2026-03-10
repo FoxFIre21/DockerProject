@@ -1,5 +1,4 @@
-# Ce projet n'a pas de dependance Python externe.
-# Il utilise uniquement la bibliotheque standard.
+# Dependances Python du projet.
 #
 # Installation recommandee sur chaque machine :
 #   python3 -m venv .venv
@@ -7,3 +6,4 @@
 #   pip install -r requirements.txt
 #
 # Python 3.8+ recommande.
+qrcode==8.2

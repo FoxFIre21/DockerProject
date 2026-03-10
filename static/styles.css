@@ -1659,6 +1659,25 @@ html, body {
   display: block;
 }
 
+.twofa-qr-wrap svg {
+  display: block;
+  width: 180px;
+  height: 180px;
+  border-radius: 8px;
+}
+
+.twofa-qr-fallback {
+  width: 180px;
+  height: 180px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px dashed var(--border-2);
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
+}
+
 .twofa-qr-label {
   font-size: 11px;
   color: var(--text-3);

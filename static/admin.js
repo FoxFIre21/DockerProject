@@ -263,11 +263,11 @@
     try {
       const payload = await adminApi("/api/2fa/totp/setup");
       const secret = payload.secret || "";
-      const uri = payload.uri || "";
+      const qrSvg = payload.qr_svg || "";
 
       container.innerHTML = `
         <div class="twofa-qr-wrap">
-          <div id="totp-qr-canvas"></div>
+          <div id="totp-qr-canvas">${qrSvg || '<div class="twofa-qr-fallback">QR indisponible</div>'}</div>
           <p class="twofa-qr-label">Scannez ce QR code avec votre application TOTP</p>
         </div>
         <p style="font-size:12px;color:var(--text-3);margin-bottom:8px">Ou entrez manuellement la cle secrete :</p>
@@ -285,20 +285,6 @@
         </div>
         <p class="twofa-feedback" id="totp-setup-feedback"></p>
       `;
-
-      if (uri && typeof QRCode !== "undefined") {
-        const qrEl = getEl("totp-qr-canvas");
-        if (qrEl) {
-          new QRCode(qrEl, {
-            text: uri,
-            width: 180,
-            height: 180,
-            colorDark: "#22d3ee",
-            colorLight: "#07091a",
-            correctLevel: QRCode.CorrectLevel.M,
-          });
-        }
-      }
 
       getEl("totp-copy-btn")?.addEventListener("click", async () => {
         try {

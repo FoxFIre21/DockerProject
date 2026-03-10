@@ -15,7 +15,7 @@ Puis ouvrir `http://127.0.0.1:8000`.
 
 ## Environnement Python
 
-Le projet n'a pas de dependance Python externe: `requirements.txt` est volontairement minimal car `server.py` utilise uniquement la bibliotheque standard.
+Le projet utilise une dependance Python externe pour generer les QR codes TOTP localement: `qrcode`.
 
 L'usage recommande est de creer un environnement virtuel par machine pour isoler l'installation locale, meme si aucune librairie supplementaire n'est necessaire aujourd'hui.
 

@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import hmac
+import io
 import json
 import os
 import re
@@ -248,6 +249,19 @@ def verify_totp(secret, code):
         secrets.compare_digest(totp_code(secret, t + d), str(code).zfill(6))
         for d in (-1, 0, 1)
     )
+
+
+def build_qr_svg(text):
+    try:
+        import qrcode
+        from qrcode.image.svg import SvgPathImage
+    except ImportError as exc:
+        raise RuntimeError("Generation QR indisponible. Lancez `pip install -r requirements.txt`.") from exc
+
+    buffer = io.BytesIO()
+    image = qrcode.make(text, image_factory=SvgPathImage, box_size=8, border=2)
+    image.save(buffer)
+    return buffer.getvalue().decode("utf-8")
 
 # ===== LOGGING =====
 
@@ -613,7 +627,11 @@ class AppHandler(BaseHTTPRequestHandler):
                 f"otpauth://totp/DockerManager:{username}"
                 f"?secret={secret}&issuer=DockerManager&algorithm=SHA1&digits=6&period=30"
             )
-            return json_response(self, HTTPStatus.OK, {"secret": secret, "uri": uri})
+            try:
+                qr_svg = build_qr_svg(uri)
+            except RuntimeError as exc:
+                return json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return json_response(self, HTTPStatus.OK, {"secret": secret, "uri": uri, "qr_svg": qr_svg})
 
         if parsed.path == "/api/sessions":
             token = get_token(self.headers)
